@@ -13,6 +13,18 @@ run `PYTHONPATH=. python -m pytest -q` after each change.
 - `scripts/smoke-test.py` and `automation/daily_digest.py` still use inline loaders — that's the
   WP-A refactor target.
 
+## Git workflow — branch + PR per work package
+
+`main` is protected, so **no direct commits to it**. For each work package:
+
+1. Branch: `git checkout -b wp-a-core-library` (one branch per WP — for parallel sessions, one branch each).
+2. Build to the handoff's acceptance criteria, committing in small steps; run `PYTHONPATH=. python -m pytest -q` before each commit.
+3. Push + open a PR: `git push -u origin <branch>`, then `gh pr create --fill --base main`.
+4. Wait for CI (the test matrix) to go green, then merge: `gh pr merge --squash --delete-branch`.
+5. Start the next WP from fresh main: `git checkout main && git pull`.
+
+Do WP-A's branch/PR first (everything depends on it). After it merges, WP-B and WP-C can run in parallel on their own branches.
+
 ## Do this, in order
 
 1. **Finish WP-A** (`handoffs/WP-A_core-library.md`): refactor `smoke-test.py` and
@@ -33,5 +45,5 @@ run `PYTHONPATH=. python -m pytest -q` after each change.
 
 ## Done when
 
-WP-A refactor is merged with green tests, and WP-B + WP-C produce files under `out/` against a
-mock endpoint. That — plus a WP-F eval pass — is your PC-build green light.
+WP-A, WP-B, and WP-C are each merged to `main` via green PRs, and WP-B + WP-C produce files under
+`out/` against a mock endpoint. That — plus a WP-F eval pass — is your PC-build green light.
