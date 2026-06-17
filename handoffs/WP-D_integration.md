@@ -23,11 +23,27 @@ WP-A (WP-C for D1's job outputs). The three halves are independent — up to thr
 
 ## D3 — Offload one real scheduled task
 
-- Convert the existing `revit-log-weekly-processor` to call the local endpoint via `aiserver`
-  instead of Claude. Keep the Claude version side-by-side for one week (eval, WP-F) before
-  cutover.
-- **Acceptance:** the local version produces an equivalent weekly summary; cutover is a config
-  flip.
+**Premise correction (2026-06-17).** The `revit-log-weekly-processor` does NOT call Claude/any
+LLM — `AI-Brain-Data/Revit-AI/process_revit_logs.py` is a deterministic parser, and its live
+task definition lives on `G:` (out of scope). So there is nothing to "convert from Claude," and
+the original "equivalent summary + config-flip" acceptance was unsatisfiable as written.
+
+**Chosen direction — writer-side engine flag (done in code, owner cutover owed):**
+`process_revit_logs.py` grows `--engine deterministic|local` (default `deterministic`):
+- `deterministic` — behaviour is exactly current (byte-identical templated weekly table; proven
+  against the original function).
+- `local` — reads the same inputs but has the local LLM write a narrative weekly summary at the
+  **same canonical path** (`context/weekly-revit-summary.md`), grounded on the deterministic
+  metrics, falling back to deterministic if the endpoint is unreachable (so the live job can't
+  break).
+
+- **Acceptance:** deterministic mode unchanged; local mode writes the weekly summary at the
+  canonical path via the local endpoint. **Cutover = change the scheduled task's args to
+  `--engine local`** (edit the G:-hosted `SKILL.md` "Execute:" line — owner action).
+- Scoped relaxation of "AI-Server read-only on AI-Brain-Data": the AI-Brain-Data script itself
+  may call the local LLM (OpenAI-compatible HTTP). The earlier parallel AI-Server `revit-weekly`
+  job (PR #6 → `out/revit-weekly/`) is superseded for the canonical slot by this flag; kept as an
+  optional `out/` artifact unless removed.
 
 ## Constraints
 
