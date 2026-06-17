@@ -13,6 +13,13 @@ WEEKLY_ROLLUP = (
     "only.\n\nLOGS:\n{corpus}"
 )
 
+RAG_ANSWER = (
+    "Answer the question using ONLY the context below. If the context does not contain the "
+    "answer, say you don't have enough information in the indexed docs -- do not guess or use "
+    "outside knowledge. Cite the sources you used by their [path # heading] tags.\n\n"
+    "QUESTION: {question}\n\nCONTEXT:\n{context}"
+)
+
 
 def render(template: str, **kwargs: str) -> str:
     """Fill a template by name, e.g. render(DIGEST, corpus=text)."""
