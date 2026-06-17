@@ -42,8 +42,8 @@ the original "equivalent summary + config-flip" acceptance was unsatisfiable as 
   `--engine local`** (edit the G:-hosted `SKILL.md` "Execute:" line — owner action).
 - Scoped relaxation of "AI-Server read-only on AI-Brain-Data": the AI-Brain-Data script itself
   may call the local LLM (OpenAI-compatible HTTP). The earlier parallel AI-Server `revit-weekly`
-  job (PR #6 → `out/revit-weekly/`) is superseded for the canonical slot by this flag; kept as an
-  optional `out/` artifact unless removed.
+  job (PR #6 → `out/revit-weekly/`) was **removed** (reverted) — the writer-side `--engine` flag
+  is the sole D3 path.
 
 ## Constraints
 

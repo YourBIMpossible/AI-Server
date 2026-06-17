@@ -38,6 +38,5 @@ Notes:
 - **Fixed a pre-existing bug:** the script had 554 trailing NUL bytes (non-importable Python —
   the weekly task was silently broken). Stripped; real code untouched; original backed up under
   `Revit-AI/_backups/`.
-- Disposition of the parallel `revit-weekly` AI-Server job (PR #6 → `out/revit-weekly/`):
-  superseded for the canonical slot by the writer-flag; kept as an optional `out/` feed unless
-  you want it removed.
+- The parallel `revit-weekly` AI-Server job (PR #6 → `out/revit-weekly/`) was **removed**
+  (reverted) — the writer-side `--engine` flag is the sole D3 path.
