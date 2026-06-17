@@ -3,7 +3,9 @@ name = "aiserver"
 version = "0.1.0"
 description = "Portable local-LLM inference + automation platform (shared library)."
 requires-python = ">=3.10"
-dependencies = []                      # stdlib-first; WPs add their own pinned deps
+dependencies = [
+    "sqlite-vec>=0.1.9",               # WP-B vector store (single-file, no server)
+]
 
 [project.optional-dependencies]
 test = ["pytest>=7"]

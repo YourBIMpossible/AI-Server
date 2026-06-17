@@ -1,0 +1,5 @@
+# RAG source roots — one path per line. '#' lines and blanks are ignored.
+# These are read-only; the index is written to out/rag/index.db.
+# Edit per machine (this is config, not code — portable per CLAUDE.md).
+F:\AI-Dev\AI-Brain-Data
+F:\AI-Dev\BIMpossible_Workspace
