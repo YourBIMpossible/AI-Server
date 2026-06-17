@@ -1,0 +1,25 @@
+# Optional containerized runtime — handy on the 3090 box (Ubuntu + Docker).
+# Requires the NVIDIA Container Toolkit on the host for GPU access.
+# Start:  docker compose up -d
+# Pull a model:  docker compose exec ollama ollama pull qwen2.5-coder:32b
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai-server-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"          # in production, bind to your LAN/Tailscale interface only
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+
+volumes:
+  ollama-models:

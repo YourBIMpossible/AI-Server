@@ -1,0 +1,12 @@
+# Models to pull. One per line. '#' lines are ignored.
+
+# Workhorse — coding + summarization. Fits the RTX 5080's 16GB at Q4 (~9GB).
+qwen2.5-coder:14b
+
+# Embeddings — for Stage 3 RAG.
+nomic-embed-text
+
+# --- On the 3090 box (24GB), step the workhorse up by editing .env MODEL to one of: ---
+#   qwen2.5-coder:32b     # fits 24GB at Q4 (~20GB)
+#   llama3.3:70b          # tight quant; best answer quality for RAG
+# (Newest Qwen3.6 GGUFs need llama.cpp until Ollama supports them — see relocate.md.)
