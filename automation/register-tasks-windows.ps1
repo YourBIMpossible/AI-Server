@@ -48,6 +48,12 @@ Register-Job -Job 'decision-drift' -TaskName 'AI-Server Decision Drift' `
     -Description 'Flags decisions with no strong match in the canonical docs (RAG).' `
     -Trigger (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At 7:30AM)
 
+# Local-LLM narrative over the deterministic Revit daily summaries (WP-D3). Runs after the
+# existing revit-log-weekly-processor (Sat ~01:00) has produced the day files.
+Register-Job -Job 'revit-weekly' -TaskName 'AI-Server Revit Weekly (local)' `
+    -Description 'Local-LLM weekly Revit overview from the daily summaries.' `
+    -Trigger (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At 7:45AM)
+
 Write-Host ""
 Write-Host "All three jobs registered. Test one now, e.g.:"
 Write-Host "  Start-ScheduledTask -TaskName 'AI-Server Daily Digest'"
