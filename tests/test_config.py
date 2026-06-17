@@ -24,3 +24,13 @@ def test_dotenv_is_read(tmp_path):
     (tmp_path / "x.env").write_text("MODEL=from-dotenv\n# comment\n", encoding="utf-8")
     cfg = load_config(dotenv=tmp_path / "x.env", overrides={"OUT": str(tmp_path)})
     assert cfg.model == "from-dotenv"
+
+
+def test_eval_pass_threshold_default_and_override(tmp_path):
+    default = load_config(dotenv=tmp_path / "none.env", overrides={"OUT": str(tmp_path)})
+    assert default.eval_pass_threshold == 0.8
+    overridden = load_config(
+        dotenv=tmp_path / "none.env",
+        overrides={"OUT": str(tmp_path), "EVAL_PASS_THRESHOLD": "0.6"},
+    )
+    assert overridden.eval_pass_threshold == 0.6

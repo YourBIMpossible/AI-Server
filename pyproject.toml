@@ -9,16 +9,18 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
+eval = ["anthropic>=0.40"]             # WP-F: optional Claude baseline (lazy-imported)
 
 [project.scripts]
 run-job = "automation.cli:main"        # WP-C: `run-job <name>` once installed
+run-eval = "eval.run:main"             # WP-F: `run-eval` once installed
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["aiserver", "automation", "rag"]
+packages = ["aiserver", "automation", "rag", "eval"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

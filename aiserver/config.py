@@ -18,6 +18,7 @@ _DEFAULTS = {
     "WORKSPACE": r"F:\AI-Dev",
     "OUT": "./out",
     "DIGEST_DAYS": "7",
+    "EVAL_PASS_THRESHOLD": "0.8",
 }
 
 
@@ -41,6 +42,7 @@ class Config:
     workspace: Path
     out: Path
     digest_days: int
+    eval_pass_threshold: float
 
     @property
     def base_url(self) -> str:
@@ -68,4 +70,5 @@ def load_config(
         workspace=Path(merged["WORKSPACE"]),
         out=out,
         digest_days=int(merged["DIGEST_DAYS"]),
+        eval_pass_threshold=float(merged["EVAL_PASS_THRESHOLD"]),
     )
