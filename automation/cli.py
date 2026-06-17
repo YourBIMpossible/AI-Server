@@ -12,7 +12,12 @@ import sys
 
 from aiserver import LLMError
 
-from . import daily_digest, decision_drift, weekly_rollup  # noqa: F401  (register on import)
+from . import (  # noqa: F401  (register on import)
+    daily_digest,
+    decision_drift,
+    revit_weekly,
+    weekly_rollup,
+)
 from ._framework import job_names, run_job
 
 

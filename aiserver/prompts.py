@@ -13,6 +13,14 @@ WEEKLY_ROLLUP = (
     "only.\n\nLOGS:\n{corpus}"
 )
 
+REVIT_WEEKLY = (
+    "You are writing a weekly Revit-usage overview for a BIM developer from a week of "
+    "machine-generated daily summaries (sessions, saves, warnings, errors, models). Produce a "
+    "tight narrative: overall activity + trend, notable days, error/warning patterns worth "
+    "attention, and one or two concrete follow-ups. Terse, facts only -- use just the numbers "
+    "present in the summaries; do not invent models or events.\n\nDAILY SUMMARIES:\n{corpus}"
+)
+
 RAG_ANSWER = (
     "Answer the question using ONLY the context below. If the context does not contain the "
     "answer, say you don't have enough information in the indexed docs -- do not guess or use "
