@@ -1,5 +1,7 @@
 # AI-Server
 
+![CI](https://github.com/YourBIMpossible/AI-Server/actions/workflows/ci.yml/badge.svg)
+
 A portable local-LLM inference stack: an always-on, OpenAI-compatible endpoint your
 automations call. Built to **run on your current rig (RTX 5080) now** and **relocate to the
 dedicated 3090 box** later by changing one line.
