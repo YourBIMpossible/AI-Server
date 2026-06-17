@@ -1,63 +1,35 @@
 #!/usr/bin/env python3
-"""Smoke test: send one chat request to the local OpenAI-compatible endpoint."""
-import json
-import os
+"""Smoke test: send one chat request to the local OpenAI-compatible endpoint.
+
+Uses the `aiserver` package for config + HTTP (no inline .env/urllib). Run directly:
+    python scripts/smoke-test.py
+"""
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root for `aiserver`
 
-def load_env():
-    env = {}
-    f = Path(__file__).resolve().parent.parent / ".env"
-    if f.exists():
-        for line in f.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            env[k.strip()] = v.strip()
-    # real environment overrides .env
-    for k in ("OLLAMA_HOST", "MODEL"):
-        if k in os.environ:
-            env[k] = os.environ[k]
-    return env
+from aiserver import LLM, LLMError, load_config
 
 
-def main():
-    env = load_env()
-    host = env.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-    model = env.get("MODEL", "qwen2.5-coder:14b")
-    url = f"{host}/v1/chat/completions"
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": "Reply with exactly: AI-Server online."}],
-        "stream": False,
-        "temperature": 0,
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-    )
+def main() -> int:
+    cfg = load_config()
+    llm = LLM(cfg)
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
-            data = json.load(r)
-        msg = data["choices"][0]["message"]["content"].strip()
-        print(f"[OK] {host}  model={model}")
-        print(f"     model said: {msg}")
-    except urllib.error.URLError as e:
+        msg = llm.chat(
+            [{"role": "user", "content": "Reply with exactly: AI-Server online."}],
+            temperature=0,
+        )
+    except LLMError as e:
         print(
-            f"[FAIL] Could not reach {url}\n       {e}\n"
-            f"       Is Ollama running? Try: ollama serve",
+            f"[FAIL] {e}\n       Is Ollama running? Try: ollama serve",
             file=sys.stderr,
         )
-        sys.exit(1)
-    except (KeyError, json.JSONDecodeError) as e:
-        print(f"[FAIL] Unexpected response shape: {e}", file=sys.stderr)
-        sys.exit(1)
+        return 1
+    print(f"[OK] {cfg.base_url}  model={cfg.model}")
+    print(f"     model said: {msg}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
