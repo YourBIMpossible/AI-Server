@@ -90,6 +90,11 @@ def ingest(
         text = path.read_text(encoding="utf-8", errors="replace")
         chunks = chunker(text)
         embeddings = embedder([c.text for c in chunks]) if chunks else []
+        if len(embeddings) != len(chunks):
+            raise ValueError(
+                f"embedder returned {len(embeddings)} vectors for {len(chunks)} "
+                f"chunks in {path}"
+            )
         store.upsert_file(
             key, mtime, h, [(c.heading, c.text, e) for c, e in zip(chunks, embeddings)]
         )

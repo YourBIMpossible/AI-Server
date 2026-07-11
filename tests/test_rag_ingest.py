@@ -2,6 +2,8 @@
 import os
 from pathlib import Path
 
+import pytest
+
 from aiserver import LLM, load_config
 from rag.ingest import ingest, read_sources
 from rag.store import VectorStore
@@ -80,3 +82,16 @@ def test_missing_source_root_is_skipped_not_fatal(embed_endpoint, tmp_path):
     embed = _embedder(embed_endpoint)
     r = ingest([tmp_path / "does-not-exist"], store, embed)
     assert (r.new, r.changed, r.removed) == (0, 0, 0)
+
+
+def test_short_embedding_response_raises_instead_of_silently_truncating(tmp_path):
+    root = tmp_path / "vault"
+    root.mkdir()
+    (root / "one.md").write_text("# A\n\nalpha beta gamma\n", encoding="utf-8")
+    store = VectorStore(tmp_path / "idx.db")
+
+    def short_embedder(texts):
+        return [[0.0, 0.0]] * max(0, len(texts) - 1)  # always one short
+
+    with pytest.raises(ValueError):
+        ingest([root], store, short_embedder)

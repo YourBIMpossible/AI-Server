@@ -19,7 +19,7 @@ copy .env.example .env
 # 1. install Ollama + pull models + smoke test
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-windows.ps1
 # 2. first automation: schedule the daily digest
-powershell -ExecutionPolicy Bypass -File .\automation\register-task-windows.ps1
+powershell -ExecutionPolicy Bypass -File .\automation\register-tasks-windows.ps1
 ```
 
 After step 1 you have a local endpoint at `http://localhost:11434/v1`, and the smoke test
@@ -31,6 +31,25 @@ confirms it answers.
 - **Stage 2 — first automation:** `daily_digest.py` summarizes the last week of `01_BuildLog/`
   + `decision-log/` into a digest, on local inference, at no Claude usage cost.
 - **Stage 3 — RAG (next build):** the embeddings model is pre-pulled; the indexer comes next.
+
+## OpenWhispr dictation-cleanup proxy
+
+`qwen2.5-coder:14b` occasionally answers dictated text as an assistant instead of just
+cleaning it up (e.g. "Here is a PDF for review" -> "I'm sorry, I can't assist with that"),
+because OpenWhispr's Self-Hosted LLM config hardcodes `temperature: 0.3` with no UI override.
+`aiserver/dictation_proxy.py` sits between OpenWhispr and Ollama, forces `temperature: 0`,
+hardens the system prompt, and falls back to the raw dictated text if the model still answers
+instead of cleaning up — verified 0/60 failures end-to-end vs. ~28% without it.
+
+```powershell
+python -m aiserver.dictation_proxy              # foreground, for testing
+powershell -File .\scripts\install-dictation-proxy-task.ps1   # permanent: logon Scheduled Task
+```
+
+Then in OpenWhispr, point **Dictation Cleanup**'s (and Note Formatting's, if used) Self-Hosted
+endpoint URL at `http://localhost:11435/v1` instead of `:11434/v1`. **Do not** route Voice
+Agent or Chat through it — those scopes are supposed to answer/act, and the proxy's fallback
+would incorrectly discard legitimate agent responses.
 
 ## Move to the 3090 box later
 
@@ -49,7 +68,7 @@ scripts/
   smoke-test.py               hit the endpoint, print a completion
 automation/
   daily_digest.py             Stage-2 first automation
-  register-task-windows.ps1   schedule the digest daily
+  register-tasks-windows.ps1  schedule the automation jobs (daily-digest, weekly-rollup, decision-drift)
 docker-compose.yml            optional containerized runtime (for the box)
 relocate.md                   exact move-to-3090 steps
 ```

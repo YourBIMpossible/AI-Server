@@ -37,6 +37,22 @@ def test_score_is_case_insensitive_and_empty_rubric_is_full():
     assert score("whatever", {}) == 1.0
 
 
+def test_score_matches_whole_word_not_substring():
+    assert score("this looks spammy to me", {"contains_any": ["spam"]}) == 0.0
+    assert score("this is spam", {"contains_any": ["spam"]}) == 1.0
+
+
+def test_score_not_contains_gates_negated_matches_to_zero():
+    rubric = {"contains_any": ["spam"], "not_contains": ["not spam"]}
+    assert score("This is NOT spam", rubric) == 0.0
+    assert score("This is spam", rubric) == 1.0
+
+
+def test_score_escapes_regex_special_characters_in_terms():
+    assert score("the total is $5.00", {"contains": ["$5.00"]}) == 1.0
+    assert score("the total is $5x00", {"contains": ["$5.00"]}) == 0.0
+
+
 def test_passed_threshold_is_inclusive():
     assert passed(0.8, 0.8) is True
     assert passed(0.79, 0.8) is False

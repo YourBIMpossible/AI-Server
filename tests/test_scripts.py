@@ -22,3 +22,15 @@ def test_smoke_test_ok_against_mock(mock_endpoint, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "[OK]" in out
     assert "model said: ok" in out  # mock chat content
+
+
+def test_docs_point_at_the_working_task_registration_script():
+    """XC-1: the singular register-task-windows.ps1 has no working entry point in
+    daily_digest.py (no __main__); onboarding docs must reference the plural script,
+    which uses the tested `python -m automation <job>` path instead.
+    """
+    for doc in (REPO / "README.md", REPO / "relocate.md"):
+        text = doc.read_text(encoding="utf-8")
+        assert "register-task-windows.ps1" not in text, f"{doc} still references the broken script"
+    assert (REPO / "automation" / "register-tasks-windows.ps1").exists()
+    assert not (REPO / "automation" / "register-task-windows.ps1").exists()

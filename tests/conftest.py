@@ -30,7 +30,7 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/v1/chat/completions":
             self._send({"choices": [{"message": {"content": "ok"}}]})
         elif self.path == "/v1/embeddings":
-            self._send({"data": [{"embedding": [0.1, 0.2, 0.3]}]})
+            self._send({"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]})
         else:
             self.send_response(404)
             self.end_headers()
@@ -90,7 +90,9 @@ class _EmbedHandler(BaseHTTPRequestHandler):
             texts = payload.get("input", [])
             if isinstance(texts, str):
                 texts = [texts]
-            self._send({"data": [{"embedding": _bow_vector(t)} for t in texts]})
+            self._send(
+                {"data": [{"index": i, "embedding": _bow_vector(t)} for i, t in enumerate(texts)]}
+            )
         elif self.path == "/v1/chat/completions":
             self._send(
                 {"choices": [{"message": {"content": "SYNTHESIZED ANSWER FROM CONTEXT"}}]}

@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
   Registers the AI-Server automation jobs as Windows Scheduled Tasks (supersedes the
-  single-task register-task-windows.ps1). Re-runnable (-Force re-registers).
+  old single-task registration script). Re-runnable (-Force re-registers).
 
     daily-digest     every day      07:00
     weekly-rollup    Mondays        07:15

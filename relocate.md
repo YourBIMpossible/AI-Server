@@ -27,7 +27,7 @@ OLLAMA_HOST=http://<box-hostname-or-tailscale-name>:11434
 ```
 
 That's it. `daily_digest.py` (and every future automation) now runs on the box's GPU.
-Re-run `register-task-windows.ps1` only if you changed the schedule.
+Re-run `register-tasks-windows.ps1` only if you changed the schedule.
 
 ## Networking & security
 
