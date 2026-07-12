@@ -78,12 +78,13 @@ def ingest(
     for key, path in disk.items():
         mtime = path.stat().st_mtime
         state = store.file_state(key)
-        if state and state[0] == mtime:
-            report.unchanged += 1
-            continue
+        # The hash is authoritative, not a fallback gated on mtime differing: an
+        # mtime-preserving restore/copy changes content without touching mtime, and
+        # a stat-only check would silently treat that as unchanged (RAG-2).
         h = file_hash(path)
         if state and state[1] == h:
-            store.touch(key, mtime)  # content identical, mtime drifted only
+            if state[0] != mtime:
+                store.touch(key, mtime)  # content identical, mtime drifted only
             report.unchanged += 1
             continue
 

@@ -50,11 +50,26 @@ def _split_section(body: str, target_tokens: int, overlap_tokens: int) -> list[s
     if len(body) // _CHARS_PER_TOKEN <= target_tokens:
         return [body]
     words = body.split()
-    target_words = max(1, target_tokens * _CHARS_PER_TOKEN)  # rough: ~1 short word/4 chars
-    # Approximate words-per-chunk from the average word length so a chunk lands near target.
+    target_chars = target_tokens * _CHARS_PER_TOKEN
+    # ASCII-whitespace splitting finds no boundaries in CJK text, a long URL, or
+    # minified code -- body.split() then returns one "word" spanning the whole
+    # section (or close to it), so word-based sizing does nothing and emits a
+    # single oversized, unsplit chunk. Fall back to a character window instead.
+    if not words or max(len(w) for w in words) > target_chars:
+        overlap_chars = overlap_tokens * _CHARS_PER_TOKEN
+        char_step = max(1, target_chars - overlap_chars)
+        return [body[i : i + target_chars] for i in range(0, len(body), char_step)]
+
+    # Approximate words-per-chunk (and words-per-overlap) from the average word
+    # length so both land near their token targets -- target_tokens/overlap_tokens
+    # are token counts, but splitting works in words, so both need the same
+    # chars-per-token -> words conversion. Subtracting overlap_tokens (a token
+    # count) from words_per_chunk (a word count) directly, as before, made the
+    # realized overlap drift with average word length instead of the requested size.
     avg_len = max(1, sum(len(w) for w in words) // max(1, len(words)) + 1)
     words_per_chunk = max(1, (target_tokens * _CHARS_PER_TOKEN) // avg_len)
-    step = max(1, words_per_chunk - overlap_tokens)
+    overlap_words = max(0, (overlap_tokens * _CHARS_PER_TOKEN) // avg_len)
+    step = max(1, words_per_chunk - overlap_words)
     pieces: list[str] = []
     i = 0
     while i < len(words):

@@ -1,5 +1,7 @@
 import json
 import threading
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -137,3 +139,122 @@ def test_embed_missing_index_raises_instead_of_trusting_order(tmp_path):
     with _running(srv) as url:
         with pytest.raises(LLMError):
             LLM(_cfg(tmp_path, url)).embed(["a"])
+
+
+# --- CLIENT-2: a 200 with a non-JSON body must not escape the LLMError contract -----
+
+
+def _raw_body_server(status: int, body: bytes, content_type: str = "text/html"):
+    class Handler(BaseHTTPRequestHandler):
+        calls = 0
+
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", 0))
+            self.rfile.read(n)
+            Handler.calls += 1
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    return HTTPServer(("127.0.0.1", 0), Handler), Handler
+
+
+def test_200_with_non_json_body_raises_llmerror_not_json_decode_error(tmp_path):
+    srv, handler = _raw_body_server(200, b"<html>not json</html>")
+    with _running(srv) as url:
+        llm = LLM(_cfg(tmp_path, url), retries=0)
+        with pytest.raises(LLMError) as exc:
+            llm.chat([{"role": "user", "content": "hi"}])
+    assert "non-JSON" in str(exc.value) or "200" in str(exc.value)
+
+
+def test_200_with_non_json_body_is_not_retried(tmp_path):
+    srv, handler = _raw_body_server(200, b"not json at all")
+    with _running(srv) as url:
+        llm = LLM(_cfg(tmp_path, url), retries=2)
+        with pytest.raises(LLMError):
+            llm.chat([{"role": "user", "content": "hi"}])
+    assert handler.calls == 1  # a shape error is not a transport error; must not retry
+
+
+# --- TEST-2: the Authorization: Bearer header path (WP-E gateway) had zero coverage --
+
+
+def _header_capturing_server():
+    captured: dict[str, str | None] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", 0))
+            self.rfile.read(n)
+            captured["authorization"] = self.headers.get("Authorization")
+            body = json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    return HTTPServer(("127.0.0.1", 0), Handler), captured
+
+
+def test_api_key_sends_authorization_bearer_header(tmp_path):
+    srv, captured = _header_capturing_server()
+    with _running(srv) as url:
+        llm = LLM(_cfg(tmp_path, url), api_key="secret-token")
+        llm.chat([{"role": "user", "content": "hi"}])
+    assert captured["authorization"] == "Bearer secret-token"
+
+
+def test_no_api_key_omits_authorization_header(tmp_path):
+    srv, captured = _header_capturing_server()
+    with _running(srv) as url:
+        llm = LLM(_cfg(tmp_path, url))  # no api_key configured
+        llm.chat([{"role": "user", "content": "hi"}])
+    assert captured.get("authorization") is None
+
+
+# --- TEST-3: the shared mock_endpoint fixture should reject a malformed body ----------
+# instead of discarding it and returning 200 for anything (it also now serves /api/ps,
+# matching real Ollama's surface -- see conftest.py).
+
+
+def test_mock_endpoint_serves_api_ps(mock_endpoint):
+    req = urllib.request.Request(f"{mock_endpoint}/api/ps")
+    with urllib.request.urlopen(req, timeout=5) as r:
+        data = json.load(r)
+    assert data == {"models": []}
+
+
+def test_mock_endpoint_rejects_chat_body_missing_messages(mock_endpoint):
+    req = urllib.request.Request(
+        f"{mock_endpoint}/v1/chat/completions",
+        data=json.dumps({"model": "m"}).encode(),  # no 'messages'
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        urllib.request.urlopen(req, timeout=5)
+        assert False, "expected an HTTPError"
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
+
+
+def test_mock_endpoint_rejects_embeddings_body_missing_input(mock_endpoint):
+    req = urllib.request.Request(
+        f"{mock_endpoint}/v1/embeddings",
+        data=json.dumps({"model": "m"}).encode(),  # no 'input'
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        urllib.request.urlopen(req, timeout=5)
+        assert False, "expected an HTTPError"
+    except urllib.error.HTTPError as e:
+        assert e.code == 400

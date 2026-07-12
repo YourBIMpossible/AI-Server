@@ -50,6 +50,26 @@ def test_fresh_then_incremental(embed_endpoint, tmp_path):
     assert set(store.indexed_paths()) == {str(f1.resolve())}
 
 
+def test_mtime_preserving_content_change_is_still_reindexed(embed_endpoint, tmp_path):
+    # RAG-2: a restore/copy that preserves mtime but changes content must not be
+    # silently treated as unchanged -- the hash, not mtime, is authoritative.
+    root = tmp_path / "vault"
+    root.mkdir()
+    f = root / "one.md"
+    f.write_text("# A\n\nalpha\n", encoding="utf-8")
+    store = VectorStore(tmp_path / "idx.db")
+    embed = _embedder(embed_endpoint)
+
+    ingest([root], store, embed)
+    original_mtime = f.stat().st_mtime
+
+    f.write_text("# A\n\ncompletely different content\n", encoding="utf-8")
+    os.utime(f, (original_mtime, original_mtime))  # force mtime back to its old value
+
+    r = ingest([root], store, embed)
+    assert (r.new, r.changed, r.removed, r.unchanged) == (0, 1, 0, 0)
+
+
 def test_mtime_drift_without_content_change_is_not_reindexed(embed_endpoint, tmp_path):
     root = tmp_path / "v"
     root.mkdir()

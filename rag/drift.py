@@ -18,11 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root for
 
 from aiserver import LLM, get_logger, load_config
 
+from .chunk import chunk_markdown
 from .store import VectorStore
 
 Embedder = Callable[[list[str]], list[list[float]]]
 DEFAULT_THRESHOLD = 1.0  # L2 on unit vectors; above this = "no strong canonical match"
-_MAX_EMBED_CHARS = 8000  # keep a long decision entry within the embed model's context window
 
 
 @dataclass
@@ -39,17 +39,28 @@ def analyze(
     *,
     exclude_prefixes: tuple[str, ...] = (),
 ) -> list[DriftItem]:
+    """For each decision doc, chunk it the same way ingest does and take the
+    strongest (lowest-distance) canonical match across all its chunks -- a hard
+    character truncation would silently miss a match whose relevant content sits
+    past the cut on a long decision entry (RAG-5)."""
     items: list[DriftItem] = []
     for f in sorted(decision_root.rglob("*.md")):
         if not f.is_file():
             continue
-        text = f.read_text(encoding="utf-8", errors="replace")[:_MAX_EMBED_CHARS]
-        vec = embedder([text])[0]
-        hits = store.knn(vec, k=1, exclude_prefixes=exclude_prefixes)
-        if hits:
-            items.append(DriftItem(str(f), hits[0].path, hits[0].distance))
-        else:
+        text = f.read_text(encoding="utf-8", errors="replace")
+        chunks = chunk_markdown(text)
+        if not chunks:
             items.append(DriftItem(str(f), None, None))
+            continue
+        vecs = embedder([c.text for c in chunks])
+        best_path: str | None = None
+        best_distance: float | None = None
+        for vec in vecs:
+            hits = store.knn(vec, k=1, exclude_prefixes=exclude_prefixes)
+            if hits and (best_distance is None or hits[0].distance < best_distance):
+                best_distance = hits[0].distance
+                best_path = hits[0].path
+        items.append(DriftItem(str(f), best_path, best_distance))
     return items
 
 
@@ -58,13 +69,22 @@ def flag(items: list[DriftItem], threshold: float) -> list[DriftItem]:
 
 
 def write_report(
-    items: list[DriftItem], threshold: float, out_dir: Path, today: str
+    items: list[DriftItem], threshold: float, out_dir: Path, today: str, *, index_empty: bool = False
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     flagged = flag(items, threshold)
-    lines = [
-        f"# Decision drift — {today}",
-        "",
+    lines = [f"# Decision drift — {today}", ""]
+    if index_empty:
+        # AUTO-2: an empty/never-ingested index makes every decision look
+        # "undocumented" for a reason that has nothing to do with documentation --
+        # say so loudly instead of letting the report read as a real 100%-drift finding.
+        lines += [
+            "> **WARNING: the RAG index has no indexed documents.** Every decision below "
+            "is flagged only because there is nothing to compare against yet — run "
+            "`python -m rag.ingest` (or wait for its schedule) before trusting this report.",
+            "",
+        ]
+    lines += [
         f"_{len(flagged)} of {len(items)} decisions have no strong match in the canonical docs "
         f"(L2 threshold {threshold:.3f})._",
         "",
@@ -96,14 +116,24 @@ def main() -> int:
         return 1
 
     store = VectorStore(cfg.out / "rag" / "index.db")
+    index_empty = not store.indexed_paths()
     items = analyze(
         decision_root, store, LLM(cfg).embed, exclude_prefixes=(str(decision_root),)
     )
     store.close()
     today = datetime.now().strftime("%Y-%m-%d")
-    report = write_report(items, DEFAULT_THRESHOLD, cfg.out / "rag", today)
-    log("drift", decisions=len(items), flagged=len(flag(items, DEFAULT_THRESHOLD)), report=str(report))
-    print(f"[OK] Wrote {report}")
+    report = write_report(items, DEFAULT_THRESHOLD, cfg.out / "rag", today, index_empty=index_empty)
+    log(
+        "drift",
+        decisions=len(items),
+        flagged=len(flag(items, DEFAULT_THRESHOLD)),
+        report=str(report),
+        index_empty=index_empty,
+    )
+    if index_empty:
+        print(f"[WARN] RAG index is empty -- drift results aren't meaningful yet. Wrote {report}")
+    else:
+        print(f"[OK] Wrote {report}")
     return 0
 
 

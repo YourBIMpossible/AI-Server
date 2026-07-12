@@ -13,7 +13,7 @@ REPO = Path(__file__).resolve().parent.parent
 import automation.daily_digest  # noqa: F401
 import automation.decision_drift  # noqa: F401
 import automation.weekly_rollup  # noqa: F401
-from automation._framework import REGISTRY, Job, job_names, register, run_job
+from automation._framework import REGISTRY, Job, JobPreconditionError, job_names, register, run_job
 
 
 def _seed_workspace(ws):
@@ -58,12 +58,42 @@ def test_daily_digest_job_writes_to_out_root(mock_endpoint, tmp_path, monkeypatc
 
 
 def test_daily_digest_no_activity(mock_endpoint, tmp_path, monkeypatch):
+    # Source roots exist but have zero recent files -- a genuinely quiet period,
+    # distinct from AUTO-6's "roots don't exist at all" case tested below.
+    ws = tmp_path / "ws"
+    (ws / "BIMpossible_Workspace" / "01_BuildLog").mkdir(parents=True)
+    (ws / "AI-Brain-Data" / "decision-log").mkdir(parents=True)
+    out = tmp_path / "out"
+    _env(monkeypatch, ws, out, mock_endpoint)
+    path = run_job("daily-digest")
+    assert "No build-log or decision-log activity" in path.read_text(encoding="utf-8")
+
+
+def test_daily_digest_reports_missing_workspace_roots_distinctly_from_no_activity(
+    mock_endpoint, tmp_path, monkeypatch
+):
+    # AUTO-6: neither source directory existing at all (e.g. WORKSPACE misconfigured
+    # after relocation) used to read identically to a genuinely quiet week -- this is
+    # the exact scenario the old version of test_daily_digest_no_activity above
+    # exercised without realizing its fixture was actually the misconfiguration case.
     ws = tmp_path / "empty"
     ws.mkdir()
     out = tmp_path / "out"
     _env(monkeypatch, ws, out, mock_endpoint)
     path = run_job("daily-digest")
-    assert "No build-log or decision-log activity" in path.read_text(encoding="utf-8")
+    body = path.read_text(encoding="utf-8")
+    assert "WORKSPACE roots not found" in body
+    assert "No build-log or decision-log activity" not in body
+
+
+def test_weekly_rollup_reports_missing_workspace_roots(mock_endpoint, tmp_path, monkeypatch):
+    # Same AUTO-6 fix applied to weekly_rollup.py, which shares collect_logs.
+    ws = tmp_path / "empty"
+    ws.mkdir()
+    out = tmp_path / "out"
+    _env(monkeypatch, ws, out, mock_endpoint)
+    path = run_job("weekly-rollup")
+    assert "WORKSPACE roots not found" in path.read_text(encoding="utf-8")
 
 
 def test_weekly_rollup_job_writes_under_its_subdir(mock_endpoint, tmp_path, monkeypatch):
@@ -100,6 +130,31 @@ def test_decision_drift_job_writes_report(embed_endpoint, tmp_path, monkeypatch)
     assert path.exists()
     assert path.name.startswith("drift-")
     assert path.parent == out / "rag"  # thin wrapper -> same location as rag.drift
+
+
+def test_decision_drift_raises_when_decision_log_missing(mock_endpoint, tmp_path, monkeypatch):
+    # AUTO-2: a missing decision-log must fail loud, not silently report "0 of 0
+    # decisions" (which reads as "all clear").
+    ws = tmp_path / "ws"
+    (ws / "BIMpossible_Workspace" / "01_BuildLog").mkdir(parents=True)
+    # deliberately do NOT create ws/AI-Brain-Data/decision-log
+    out = tmp_path / "out"
+    _env(monkeypatch, ws, out, mock_endpoint)
+    with pytest.raises(JobPreconditionError):
+        run_job("decision-drift")
+
+
+def test_decision_drift_banners_an_empty_index(embed_endpoint, tmp_path, monkeypatch):
+    # AUTO-2: a never-ingested index must not silently flag every decision as
+    # "undocumented" without saying that's an artifact of an empty index.
+    ws = tmp_path / "ws"
+    _seed_workspace(ws)  # decision-log exists with an entry, but nothing was ever ingested
+    out = tmp_path / "out"
+    _env(monkeypatch, ws, out, embed_endpoint)
+
+    path = run_job("decision-drift")
+    body = path.read_text(encoding="utf-8")
+    assert "WARNING: the RAG index has no indexed documents" in body
 
 
 def test_cli_list_lists_the_jobs():

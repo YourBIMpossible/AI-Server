@@ -50,7 +50,10 @@ class LLM:
             try:
                 req = urllib.request.Request(url, data=data, headers=self._headers())
                 with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                    return json.load(r)
+                    try:
+                        return json.load(r)
+                    except ValueError as e:
+                        raise LLMError(f"{url} returned HTTP 200 with a non-JSON body: {e}") from e
             except urllib.error.HTTPError as e:
                 body = e.read().decode("utf-8", errors="replace")
                 if e.code not in self._RETRYABLE_CODES and e.code < 500:

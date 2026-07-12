@@ -50,6 +50,17 @@ def test_query_refuses_when_best_match_too_far(embed_endpoint, tmp_path):
     assert res.answer == REFUSAL
 
 
+def test_query_excludes_individually_out_of_threshold_hits_from_citations(embed_endpoint, tmp_path):
+    # RAG-4: only the top hit was checked against max_distance; a weaker k>1 hit
+    # that individually fails the threshold used to still be cited/fed to the model.
+    store = _indexed(tmp_path, embed_endpoint)
+    res = query("alpha", store, _llm(embed_endpoint), k=2, max_distance=0.5)
+    assert res.refused is False  # the top hit (a.md) is well within threshold
+    assert res.citations  # at least the top hit survives
+    assert all(h.distance <= 0.5 for h in res.citations)
+    assert all(h.path.endswith("a.md") for h in res.citations)  # b.md's weak match is excluded
+
+
 def test_format_context_includes_path_and_heading(embed_endpoint, tmp_path):
     store = _indexed(tmp_path, embed_endpoint)
     res = query("alpha", store, _llm(embed_endpoint), k=1)

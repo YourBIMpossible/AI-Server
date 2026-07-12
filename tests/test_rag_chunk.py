@@ -40,6 +40,33 @@ def test_empty_or_whitespace_text_yields_no_chunks():
     assert chunk_markdown("   \n\n  \n") == []
 
 
+def test_overlap_is_measured_in_words_not_tokens():
+    # RAG-1 (store): overlap_tokens was subtracted directly from words_per_chunk
+    # (a word count) without unit conversion, so realized overlap drifted with
+    # average word length instead of approximating the requested token count.
+    words = [f"w{i:07d}" for i in range(500)]  # each word is 8 chars -> avg_len 9
+    body = " ".join(words)
+    chunks = chunk_markdown(f"# S\n\n{body}\n", target_tokens=100, overlap_tokens=20)
+    assert len(chunks) > 1
+
+    overlap = len(set(chunks[0].text.split()) & set(chunks[1].text.split()))
+    # expected: (20 tokens * 4 chars/token) // avg_len(9) = 8 words. The old code
+    # used the raw token count (20) as a word count directly -- 2.5x too much here.
+    assert overlap == 8
+
+
+def test_no_space_text_falls_back_to_character_windowing():
+    # RAG-4 (store): CJK/minified/long-URL text has no ASCII whitespace, so
+    # body.split() treats the whole section as one "word" and word-based sizing
+    # does nothing -- a single oversized, unsplit chunk that can blow the embed
+    # model's context limit. Must fall back to character windows instead.
+    cjk_text = "中文" * 3000  # 6000 chars, zero spaces
+    chunks = chunk_markdown(f"# H\n\n{cjk_text}\n", target_tokens=200, overlap_tokens=20)
+    assert len(chunks) > 1
+    assert all(len(c.text) <= 200 * 4 for c in chunks)  # each chunk respects target_chars
+    assert all(c.heading == "H" for c in chunks)
+
+
 def test_crlf_and_lf_chunk_identically():
     lf = "# H\n\nalpha beta\n"
     crlf = "# H\r\n\r\nalpha beta\r\n"

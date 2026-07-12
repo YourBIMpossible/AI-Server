@@ -42,10 +42,17 @@ def write_report(results, *, threshold: float, model: str, out_dir: Path, today:
     for task, rate, recommendation in rows:
         lines.append(f"| {task} | {rate*100:.0f}% | {recommendation} |")
 
-    lines += ["", "## Per-case results", "", "| Case | Task | Score | Passed |", "|------|------|-------|--------|"]
+    lines += ["", "## Per-case results", "", "| Case | Task | Score | Passed | Baseline score |", "|------|------|-------|--------|----------------|"]
     for r in results:
-        lines.append(f"| {r.id} | {r.task} | {r.score:.2f} | {'yes' if r.passed else 'no'} |")
+        baseline_col = f"{r.baseline_score:.2f}" if r.baseline_score is not None else "—"
+        lines.append(f"| {r.id} | {r.task} | {r.score:.2f} | {'yes' if r.passed else 'no'} | {baseline_col} |")
     lines.append("")
+
+    if baseline_n:
+        lines += ["## Claude baseline answers", ""]
+        for r in results:
+            if r.baseline is not None:
+                lines += [f"### {r.id}", "", r.baseline, ""]
 
     report = out_dir / f"report-{today}.md"
     report.write_text("\n".join(lines), encoding="utf-8")

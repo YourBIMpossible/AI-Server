@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root for
 
 from aiserver import LLM, get_logger, load_config
 
-from .baseline import claude_baseline
+from .baseline import DEFAULT_BASELINE_MODEL, claude_baseline
 from .scoring import passed, score
 
 CASES_FILE = Path(__file__).resolve().parent / "cases.jsonl"
@@ -30,14 +30,26 @@ class Result:
     passed: bool
     output: str
     baseline: str | None = None
+    baseline_score: float | None = None
 
 
 def load_cases(path: Path = CASES_FILE) -> list[dict]:
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    """Parse cases.jsonl, one JSON object per non-blank line.
+
+    Raises ValueError naming the file and 1-based line number on a malformed line,
+    instead of letting json.JSONDecodeError's own message (which doesn't know the
+    source file) surface as an unattributed traceback.
+    """
+    cases = []
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            cases.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            raise ValueError(f"{path}:{lineno}: invalid JSON: {e}") from e
+    return cases
 
 
 def run_cases(
@@ -46,12 +58,25 @@ def run_cases(
     *,
     threshold: float,
     baseline_key: str | None = None,
+    baseline_model: str = DEFAULT_BASELINE_MODEL,
 ) -> list[Result]:
     results: list[Result] = []
     for c in cases:
         output = llm.chat([{"role": "user", "content": c["input"]}], temperature=0)
         s = score(output, c.get("rubric", {}))
-        baseline = claude_baseline(c["input"], api_key=baseline_key) if baseline_key else None
+        baseline = None
+        baseline_score = None
+        if baseline_key:
+            try:
+                baseline = claude_baseline(c["input"], api_key=baseline_key, model=baseline_model)
+            except Exception as e:
+                # The Claude baseline is a best-effort comparison, not the harness's
+                # job. A transient cloud error must not take down the local run that
+                # already succeeded for this case.
+                print(f"[WARN] Claude baseline failed for {c['id']}: {e}", file=sys.stderr)
+            else:
+                if baseline is not None:
+                    baseline_score = score(baseline, c.get("rubric", {}))
         results.append(
             Result(
                 id=c["id"],
@@ -60,6 +85,7 @@ def run_cases(
                 passed=passed(s, threshold),
                 output=output,
                 baseline=baseline,
+                baseline_score=baseline_score,
             )
         )
     return results
@@ -68,13 +94,19 @@ def run_cases(
 def main() -> int:
     cfg = load_config()
     log = get_logger("eval")
-    cases = load_cases()
     threshold = cfg.eval_pass_threshold
     baseline_key = os.environ.get("ANTHROPIC_API_KEY")
 
     try:
-        results = run_cases(cases, LLM(cfg), threshold=threshold, baseline_key=baseline_key)
-    except Exception as e:  # endpoint down, etc. -- surface, don't write a misleading report
+        cases = load_cases()
+        results = run_cases(
+            cases,
+            LLM(cfg),
+            threshold=threshold,
+            baseline_key=baseline_key,
+            baseline_model=cfg.baseline_model,
+        )
+    except Exception as e:  # malformed cases file, endpoint down, etc. -- surface, don't write a misleading report
         print(f"[FAIL] eval run failed: {e}", file=sys.stderr)
         return 1
 

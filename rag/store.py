@@ -29,11 +29,27 @@ def _normalize(vec: list[float]) -> list[float]:
     return [x / norm for x in vec] if norm else list(vec)
 
 
+def _validate_embedding(embedding: list[float]) -> None:
+    """Reject a vector that would silently corrupt the index: empty, containing a
+    non-finite value, or all-zero. A zero vector isn't unit-length after
+    normalization (breaks the L2==cosine invariant every distance relies on), and
+    a NaN/inf propagates into `distance`, making `ORDER BY distance` undefined and
+    defeating the max_distance grounding guard (a NaN comparison is always False)."""
+    if not embedding:
+        raise ValueError("embedding is empty (0-dimensional)")
+    if not all(math.isfinite(x) for x in embedding):
+        raise ValueError("embedding contains a non-finite value (NaN/inf)")
+    if math.sqrt(sum(x * x for x in embedding)) == 0:
+        raise ValueError("embedding has zero norm (an all-zero vector)")
+
+
 class VectorStore:
     def __init__(self, path: Path | str):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(str(self.path))
+        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA busy_timeout=5000")
         self.db.enable_load_extension(True)
         sqlite_vec.load(self.db)
         self.db.enable_load_extension(False)
@@ -84,6 +100,7 @@ class VectorStore:
         with self.db:
             self._delete_chunks(path)
             for ord_, (heading, text, embedding) in enumerate(chunks):
+                _validate_embedding(embedding)
                 self._ensure_vec(len(embedding))
                 cur = self.db.execute(
                     "INSERT INTO chunks(path, heading, text, ord) VALUES(?, ?, ?, ?)",
@@ -130,25 +147,36 @@ class VectorStore:
     ) -> list[Hit]:
         if self._dim is None:
             return []
+        qvec = sqlite_vec.serialize_float32(_normalize(embedding))
+        total = self.db.execute("SELECT COUNT(*) FROM vec_chunks").fetchone()[0]
         fetch = k * 5 + 10 if exclude_prefixes else k
-        rows = self.db.execute(
-            "SELECT rowid, distance FROM vec_chunks WHERE embedding MATCH ? "
-            "ORDER BY distance LIMIT ?",
-            (sqlite_vec.serialize_float32(_normalize(embedding)), fetch),
-        ).fetchall()
         hits: list[Hit] = []
-        for rowid, distance in rows:
-            row = self.db.execute(
-                "SELECT path, heading, text, ord FROM chunks WHERE id=?", (rowid,)
-            ).fetchone()
-            if row is None:
-                continue
-            path, heading, text, ord_ = row
-            if any(path.startswith(p) for p in exclude_prefixes):
-                continue
-            hits.append(Hit(path=path, heading=heading, text=text, distance=distance, ord=ord_))
-            if len(hits) >= k:
+        while True:
+            rows = self.db.execute(
+                "SELECT rowid, distance FROM vec_chunks WHERE embedding MATCH ? "
+                "ORDER BY distance LIMIT ?",
+                (qvec, fetch),
+            ).fetchall()
+            hits = []
+            for rowid, distance in rows:
+                row = self.db.execute(
+                    "SELECT path, heading, text, ord FROM chunks WHERE id=?", (rowid,)
+                ).fetchone()
+                if row is None:
+                    continue
+                path, heading, text, ord_ = row
+                if any(path.startswith(p) for p in exclude_prefixes):
+                    continue
+                hits.append(Hit(path=path, heading=heading, text=text, distance=distance, ord=ord_))
+                if len(hits) >= k:
+                    break
+            # A fixed over-fetch can come up short if the nearest `fetch` rows are
+            # disproportionately excluded (e.g. all under an excluded prefix), even
+            # though a real match sits further down the ranking (RAG-6). Grow the
+            # fetch and retry until k hits survive filtering or the index is exhausted.
+            if len(hits) >= k or fetch >= total:
                 break
+            fetch = min(total, fetch * 4)
         return hits
 
     def close(self) -> None:

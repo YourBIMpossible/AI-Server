@@ -13,7 +13,7 @@ import sys
 from aiserver import LLMError
 
 from . import daily_digest, decision_drift, weekly_rollup  # noqa: F401  (register on import)
-from ._framework import job_names, run_job
+from ._framework import JobPreconditionError, job_names, run_job
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,6 +31,9 @@ def main(argv: list[str] | None = None) -> int:
     except KeyError as e:
         print(f"[FAIL] {e}", file=sys.stderr)
         return 2
+    except JobPreconditionError as e:
+        print(f"[FAIL] {e}", file=sys.stderr)
+        return 3
     except LLMError as e:
         print(f"[FAIL] {e}", file=sys.stderr)
         return 1

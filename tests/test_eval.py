@@ -53,6 +53,24 @@ def test_score_escapes_regex_special_characters_in_terms():
     assert score("the total is $5x00", {"contains": ["$5.00"]}) == 0.0
 
 
+def test_score_matches_a_term_that_is_itself_a_complete_identifier():
+    # EVAL-3-REG: the code-bug case's rubric terms must still match the natural
+    # "raises a ZeroDivisionError" phrasing after EVAL-3 switched to whole-word
+    # matching -- "ZeroDivisionError" is a complete word in that sentence, even
+    # though "division"/"zero" alone are only substrings of it.
+    rubric = {"contains_any": ["zero", "divide by", "division", "ZeroDivisionError"]}
+    assert score("Yes, this raises a ZeroDivisionError when b is 0.", rubric) == 1.0
+    assert score("Yes, division by zero occurs.", rubric) == 1.0
+
+
+def test_score_empty_term_in_not_contains_does_not_zero_everything():
+    assert score("anything at all", {"not_contains": [""]}) == 1.0
+
+
+def test_score_empty_term_in_contains_any_does_not_auto_pass():
+    assert score("anything at all", {"contains_any": [""]}) == 0.0
+
+
 def test_passed_threshold_is_inclusive():
     assert passed(0.8, 0.8) is True
     assert passed(0.79, 0.8) is False
@@ -72,6 +90,16 @@ def test_repo_cases_file_is_valid_and_sized():
     assert len({c["id"] for c in cases}) == len(cases)  # unique ids
 
 
+def test_load_cases_raises_value_error_naming_the_file_and_line(tmp_path):
+    p = _cases_file(tmp_path, ['{"id":"a","task":"t","input":"hi","rubric":{}}', "{not valid json"])
+    try:
+        load_cases(p)
+        assert False, "expected ValueError"
+    except ValueError as e:
+        assert str(p) in str(e)
+        assert ":2:" in str(e)  # 1-based line number of the malformed line
+
+
 # --- local runs against the mock endpoint --------------------------------
 def test_run_cases_scores_each_case(mock_endpoint, tmp_path):
     p = _cases_file(
@@ -86,6 +114,39 @@ def test_run_cases_scores_each_case(mock_endpoint, tmp_path):
     assert by["pass"].score == 1.0 and by["pass"].passed is True
     assert by["fail"].score == 0.0 and by["fail"].passed is False
     assert by["pass"].baseline is None  # no ANTHROPIC_API_KEY -> baseline skipped
+
+
+# --- EVAL-1/4/5: baseline is scored+recorded, isolated, and model-configurable ---
+
+
+def test_run_cases_scores_and_records_the_baseline(mock_endpoint, tmp_path, monkeypatch):
+    seen_models = []
+
+    def fake_baseline(prompt, *, api_key, model):
+        seen_models.append(model)
+        return "ok"
+
+    monkeypatch.setattr("eval.run.claude_baseline", fake_baseline)
+    p = _cases_file(tmp_path, ['{"id":"b","task":"digest","input":"x","rubric":{"contains":["ok"]}}'])
+    results = run_cases(
+        load_cases(p), _llm(mock_endpoint), threshold=0.8, baseline_key="fake-key", baseline_model="custom-model"
+    )
+    r = results[0]
+    assert r.baseline == "ok"
+    assert r.baseline_score == 1.0
+    assert seen_models == ["custom-model"]
+
+
+def test_run_cases_baseline_failure_does_not_abort_the_local_run(mock_endpoint, tmp_path, monkeypatch):
+    def failing_baseline(prompt, *, api_key, model):
+        raise RuntimeError("transient cloud error")
+
+    monkeypatch.setattr("eval.run.claude_baseline", failing_baseline)
+    p = _cases_file(tmp_path, ['{"id":"b","task":"digest","input":"x","rubric":{"contains":["ok"]}}'])
+    results = run_cases(load_cases(p), _llm(mock_endpoint), threshold=0.8, baseline_key="fake-key")
+    r = results[0]
+    assert r.score == 1.0 and r.passed is True  # local result unaffected by the cloud failure
+    assert r.baseline is None and r.baseline_score is None
 
 
 # --- report / routing ----------------------------------------------------
@@ -118,6 +179,20 @@ def test_write_report_contains_table_and_model(mock_endpoint, tmp_path):
     assert "mock-model" in text
 
 
+def test_write_report_renders_the_baseline_instead_of_discarding_it(mock_endpoint, tmp_path, monkeypatch):
+    monkeypatch.setattr("eval.run.claude_baseline", lambda prompt, *, api_key, model: "claude's own answer")
+    p = _cases_file(tmp_path, ['{"id":"d1","task":"digest","input":"x","rubric":{"contains":["ok"]}}'])
+    results = run_cases(load_cases(p), _llm(mock_endpoint), threshold=0.8, baseline_key="fake-key")
+    out = tmp_path / "out" / "eval"
+    report = write_report(results, threshold=0.8, model="mock-model", out_dir=out, today="2026-06-16")
+    text = report.read_text(encoding="utf-8")
+    assert "Claude baseline: on" in text
+    assert "claude's own answer" in text  # EVAL-1: no longer paid-for-and-discarded
+
+
 # --- baseline ------------------------------------------------------------
-def test_claude_baseline_skipped_without_key():
+def test_claude_baseline_skipped_without_key(monkeypatch):
+    # TEST-1: explicit even though the conftest autouse fixture already clears
+    # this -- documents the requirement locally, not just via a suite-wide default.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     assert claude_baseline("hello", api_key=None) is None

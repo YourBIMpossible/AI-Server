@@ -47,7 +47,8 @@ powershell -File .\scripts\install-dictation-proxy-task.ps1   # permanent: logon
 ```
 
 Then in OpenWhispr, point **Dictation Cleanup**'s (and Note Formatting's, if used) Self-Hosted
-endpoint URL at `http://localhost:11435/v1` instead of `:11434/v1`. **Do not** route Voice
+endpoint URL at `http://localhost:11435/v1` instead of `:11434/v1` (override the listen
+address via `DICTATION_PROXY_HOST` / `DICTATION_PROXY_PORT` in `.env`). **Do not** route Voice
 Agent or Chat through it — those scopes are supposed to answer/act, and the proxy's fallback
 would incorrectly discard legitimate agent responses.
 

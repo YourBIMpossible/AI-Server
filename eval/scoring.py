@@ -21,7 +21,13 @@ def _contains_term(text: str, term: str) -> bool:
     side whose edge character is itself a word character -- `\\b` can never be
     satisfied between two non-word characters, so an unconditional `\\bterm\\b`
     fails to match terms that start/end in punctuation (e.g. "$5.00").
+
+    An empty term never matches: `re.search("", text)` matches everywhere, which
+    would make a malformed rubric's "" silently force every score to 0 (as a
+    not_contains term) or always satisfy contains_any -- both wrong.
     """
+    if not term:
+        return False
     pattern = re.escape(term)
     left = r"\b" if term[:1].isalnum() or term[:1] == "_" else ""
     right = r"\b" if term[-1:].isalnum() or term[-1:] == "_" else ""

@@ -27,6 +27,11 @@ from aiserver import LLM, Config, get_logger, load_config
 REGISTRY: dict[str, type["Job"]] = {}
 
 
+class JobPreconditionError(RuntimeError):
+    """A job's required input (a directory, an index, etc.) is missing or invalid --
+    distinct from LLMError so the CLI can give it its own clear [FAIL] message."""
+
+
 def register(cls: type["Job"]) -> type["Job"]:
     if not cls.name:
         raise ValueError(f"{cls.__name__} must set a non-empty `name`")
@@ -66,8 +71,14 @@ class Job:
 
 def collect_logs(
     workspace: Path, days: int, *, per_file: int = 4000, cap: int = 24000
-) -> tuple[list[str], str]:
-    """Gather recent BuildLog + decision-log markdown into (listed, corpus). Read-only."""
+) -> tuple[list[str], str, bool]:
+    """Gather recent BuildLog + decision-log markdown into (listed, corpus, any_root_found).
+    Read-only.
+
+    `any_root_found` is False only when NEITHER source directory exists under
+    `workspace` -- distinct from both existing but having zero recent files, which
+    is a genuinely quiet period, not a misconfigured WORKSPACE after relocation.
+    """
     sources = [
         ("Build log", workspace / "BIMpossible_Workspace" / "01_BuildLog"),
         ("Decision log", workspace / "AI-Brain-Data" / "decision-log"),
@@ -75,12 +86,14 @@ def collect_logs(
     cutoff = time.time() - days * 86400
     listed: list[str] = []
     chunks: list[str] = []
+    any_root_found = False
     for label, folder in sources:
         if not folder.exists():
             continue
+        any_root_found = True
         files = [p for p in folder.glob("*.md") if p.is_file() and p.stat().st_mtime >= cutoff]
         for p in sorted(files, key=lambda p: p.stat().st_mtime, reverse=True):
             listed.append(f"{label}: {p.name}")
             text = p.read_text(encoding="utf-8", errors="replace")[:per_file]
             chunks.append(f"### [{label}] {p.name}\n{text}")
-    return listed, "\n\n".join(chunks)[:cap]
+    return listed, "\n\n".join(chunks)[:cap], any_root_found

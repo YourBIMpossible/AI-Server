@@ -14,4 +14,4 @@
 {"id": "classify-language", "task": "classify", "input": "Identify the language (English, Spanish, or French). Reply with one word.\nTEXT: Bonjour, comment allez-vous aujourd'hui?", "rubric": {"contains_any": ["french"]}}
 {"id": "extract-email", "task": "extract", "input": "Extract the email address. Reply with only the address.\nTEXT: Please contact Jane at jane.doe@example.com for scheduling.", "rubric": {"contains": ["jane.doe@example.com"]}}
 {"id": "code-language", "task": "code", "input": "In one word, what programming language is this snippet?\nCODE: def add(a, b):\n    return a + b", "rubric": {"contains_any": ["python"]}}
-{"id": "code-bug", "task": "code", "input": "Does this function have a bug? Answer yes or no, then explain in one short sentence.\nCODE: def divide(a, b):\n    return a / b", "rubric": {"contains_any": ["zero", "divide by", "division", "ZeroDivision"]}}
+{"id": "code-bug", "task": "code", "input": "Does this function have a bug? Answer yes or no, then explain in one short sentence.\nCODE: def divide(a, b):\n    return a / b", "rubric": {"contains_any": ["zero", "divide by", "division", "ZeroDivisionError"]}}

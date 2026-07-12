@@ -52,11 +52,15 @@ def query(
     hits = store.knn(qvec, k=k)
     if not hits or hits[0].distance > max_distance:
         return QueryResult(answer=REFUSAL, citations=[], refused=True)
+    # The top hit clearing max_distance only proves *something* is grounded --
+    # weaker hits at k>1 must individually clear it too, or they get fed to the
+    # model (and cited as a source) despite being effectively unrelated (RAG-4).
+    grounded = [h for h in hits if h.distance <= max_distance]
     answer = llm.chat(
-        [{"role": "user", "content": render(RAG_ANSWER, question=question, context=format_context(hits))}],
+        [{"role": "user", "content": render(RAG_ANSWER, question=question, context=format_context(grounded))}],
         temperature=0,
     )
-    return QueryResult(answer=answer, citations=hits, refused=False)
+    return QueryResult(answer=answer, citations=grounded, refused=False)
 
 
 def main() -> int:

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -102,14 +103,37 @@ def last_user_content(messages: list[dict]) -> str:
     return ""
 
 
-def looks_like_answer_not_cleanup(text: str) -> bool:
-    """True if `text` reads like the model answered/refused rather than cleaned the input."""
-    lo = text.lower()
-    if any(marker in lo for marker in _ANSWER_MARKERS):
-        return True
+_WORD = re.compile(r"[a-z0-9]+")
+
+
+def _content_words(text: str) -> set[str]:
+    return {w for w in _WORD.findall(text.lower()) if len(w) > 2}
+
+
+def looks_like_answer_not_cleanup(text: str, original: str = "") -> bool:
+    """True if `text` reads like the model answered/refused rather than cleaned the input.
+
+    A marker match alone isn't a reliable signal: ordinary first-person dictation
+    can innocently contain a marker phrase (dictating "sure, I can get that to you
+    by Friday" cleans to a sentence that itself starts with "Sure, I..."). What a
+    genuine refusal/answer almost never does is share the input's own content
+    words -- it talks about itself, not about what the user said -- so a marker
+    only counts when `original` is given and most of its vocabulary is missing
+    from the candidate text. Without an `original` to compare against, this falls
+    back to marker-only detection.
+    """
     if len(text.strip()) <= 2:  # degenerate output (e.g. a bare "-")
         return True
-    return False
+    lo = text.lower()
+    if not any(marker in lo for marker in _ANSWER_MARKERS):
+        return False
+    if not original.strip():
+        return True
+    input_words = _content_words(original)
+    if not input_words:
+        return True
+    overlap = len(input_words & _content_words(text)) / len(input_words)
+    return overlap < 0.25
 
 
 def _fallback_response(original_messages: list[dict]) -> dict:
@@ -123,8 +147,11 @@ def sanitize_response(response: dict, original_messages: list[dict]) -> dict:
     try:
         content = response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
-        return response
-    if looks_like_answer_not_cleanup(content):
+        # A 200 response that isn't shaped like a chat completion at all (e.g. an
+        # upstream error body) can't be trusted any more than a detected refusal --
+        # same safety net, not a pass-through of whatever this actually was.
+        return _fallback_response(original_messages)
+    if looks_like_answer_not_cleanup(content, last_user_content(original_messages)):
         out = json.loads(json.dumps(response))  # deep copy, stdlib-only
         out["choices"][0]["message"]["content"] = last_user_content(original_messages)
         return out
@@ -142,7 +169,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length) if length else None
         req = urllib.request.Request(self.upstream_base_url + self.path, data=body, method=method)
-        for h in ("Content-Type",):
+        for h in ("Content-Type", "Authorization"):
             if h in self.headers:
                 req.add_header(h, self.headers[h])
         try:
@@ -150,7 +177,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self._send_bytes(r.read(), r.status, r.headers.get("Content-Type"))
         except urllib.error.HTTPError as e:
             self._send_bytes(e.read(), e.code, "application/json")
-        except urllib.error.URLError as e:
+        except (urllib.error.URLError, OSError) as e:
+            # OSError also catches a read-phase timeout/reset after the connection
+            # was established -- URLError alone would miss that (DP-2). There's no
+            # user text to fall back to on this passthrough path, so a clear 502
+            # is the correct response rather than a crashed handler thread.
             self._send_json({"error": f"upstream unreachable: {e}"}, 502)
 
     def _send_bytes(self, body: bytes, code: int, content_type: str | None):
@@ -178,10 +209,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
 
         upstream_body = build_upstream_request(client_body)
+        headers = {"Content-Type": "application/json"}
+        if "Authorization" in self.headers:
+            headers["Authorization"] = self.headers["Authorization"]
         req = urllib.request.Request(
             self.upstream_base_url + CHAT_PATH,
             data=json.dumps(upstream_body).encode(),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         try:
@@ -191,12 +225,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self._send_bytes(e.read(), e.code, "application/json")
             return
         except urllib.error.URLError as e:
+            # The connection itself couldn't be established -- there's no completion
+            # to fall back to interpreting, so this is a real 502, not a cleanup miss.
             self._send_json({"error": f"upstream unreachable: {e}"}, 502)
             return
         except json.JSONDecodeError:
             # A 200 that isn't one valid JSON object (e.g. a streaming response slipping
             # through despite the stream=False override). Same safety net as a detected
             # refusal: fall back to the raw dictated text instead of failing the request.
+            self._send_json(_fallback_response(client_body.get("messages", [])))
+            return
+        except OSError:
+            # The connection WAS established but died reading the response -- most
+            # likely a read-phase timeout while the model was still generating past
+            # the 120s limit. Neither HTTPError nor URLError catches this (DP-2): it
+            # used to propagate uncaught and drop the request, contradicting this
+            # module's own guarantee. Same fallback as an unparseable body.
             self._send_json(_fallback_response(client_body.get("messages", [])))
             return
 
@@ -207,19 +251,23 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 def run_proxy(host: str, port: int, upstream_base_url: str) -> ThreadingHTTPServer:
     handler = type("_BoundProxyHandler", (_ProxyHandler,), {"upstream_base_url": upstream_base_url})
     srv = ThreadingHTTPServer((host, port), handler)
+    srv.daemon_threads = True  # don't let an in-flight request block process shutdown
     return srv
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=11435)
+    parser.add_argument("--host", default=None, help="defaults to DICTATION_PROXY_HOST from .env")
+    parser.add_argument("--port", type=int, default=None, help="defaults to DICTATION_PROXY_PORT from .env")
     parser.add_argument("--upstream", default=None, help="defaults to OLLAMA_HOST from .env")
     args = parser.parse_args()
 
-    upstream = args.upstream or load_config().base_url
-    srv = run_proxy(args.host, args.port, upstream)
-    print(f"Dictation-cleanup proxy: http://{args.host}:{args.port} -> {upstream}")
+    cfg = load_config()
+    host = args.host or cfg.dictation_proxy_host
+    port = args.port or cfg.dictation_proxy_port
+    upstream = args.upstream or cfg.base_url
+    srv = run_proxy(host, port, upstream)
+    print(f"Dictation-cleanup proxy: http://{host}:{port} -> {upstream}")
     print("Point OpenWhispr's Self-Hosted endpoint URL at this address (add /v1 if needed).")
     try:
         srv.serve_forever()

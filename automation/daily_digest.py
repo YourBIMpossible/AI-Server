@@ -24,7 +24,21 @@ class DigestJob(Job):
         today = datetime.now().strftime("%Y-%m-%d")
         self.cfg.out.mkdir(parents=True, exist_ok=True)
         out_file = self.cfg.out / f"digest-{today}.md"
-        listed, corpus = collect_logs(self.cfg.workspace, self.cfg.digest_days)
+        listed, corpus, any_root_found = collect_logs(self.cfg.workspace, self.cfg.digest_days)
+
+        if not any_root_found:
+            # A wrong WORKSPACE after relocation must not look identical to a
+            # genuinely quiet week -- neither source directory existing at all is
+            # a configuration problem, not "no activity" (AUTO-6).
+            out_file.write_text(
+                f"# Daily digest — {today}\n\n**WORKSPACE roots not found** (looked under "
+                f"`{self.cfg.workspace}`) — neither BuildLog nor decision-log exists there. "
+                f"Check WORKSPACE in `.env` (see relocate.md) before trusting a future "
+                f"\"No activity\" digest.\n",
+                encoding="utf-8",
+            )
+            self.log("workspace-roots-not-found", out=str(out_file), workspace=str(self.cfg.workspace))
+            return out_file
 
         if not corpus.strip():
             out_file.write_text(
