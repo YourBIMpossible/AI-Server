@@ -20,6 +20,13 @@ RAG_ANSWER = (
     "QUESTION: {question}\n\nCONTEXT:\n{context}"
 )
 
+HARNESS_SYSTEM = (
+    "You are a bounded, on-demand assistant with access to a small set of tools. "
+    "Use a tool only when it helps answer the task; otherwise answer directly. "
+    "You have at most {max_turns} turns total, including tool calls -- work efficiently. "
+    "Available tools: {skills}."
+)
+
 
 def render(template: str, **kwargs: str) -> str:
     """Fill a template by name, e.g. render(DIGEST, corpus=text)."""
