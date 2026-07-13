@@ -32,6 +32,45 @@ def test_events_are_written_as_typed_jsonl_lines(tmp_path):
     assert lines[2]["args"] == {"text": "hi"}
 
 
+def test_tool_called_without_ignored_args_defaults_to_empty_list(tmp_path):
+    """The pre-existing 3-arg call shape (turn, skill, args) -- used by every call
+    site before this change -- must keep working unchanged, and ignored_args must
+    still be present in the JSON (as []) rather than missing, so downstream
+    tooling never has to check for a missing key."""
+    path = tmp_path / "run3" / "transcript.jsonl"
+    t = Transcript(path)
+    t.tool_called(1, "echo", {"text": "hi"})
+    t.close()
+    line = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+    assert line == {
+        "event": "tool_called",
+        "turn": 1,
+        "skill": "echo",
+        "args": {"text": "hi"},
+        "ignored_args": [],
+    }
+
+
+def test_tool_called_records_explicit_ignored_args(tmp_path):
+    path = tmp_path / "run4" / "transcript.jsonl"
+    t = Transcript(path)
+    t.tool_called(1, "echo", {"text": "hi"}, ignored_args=["extra"])
+    t.close()
+    line = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+    assert line["ignored_args"] == ["extra"]
+
+
+def test_tool_failed_event(tmp_path):
+    """tool_failed is semantically distinct from validation_failed: dispatch was
+    valid (right skill, right args), but the skill's own execution raised."""
+    path = tmp_path / "run5" / "transcript.jsonl"
+    t = Transcript(path)
+    t.tool_failed(1, "boom", "RuntimeError: boom")
+    t.close()
+    line = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+    assert line == {"event": "tool_failed", "turn": 1, "skill": "boom", "error": "RuntimeError: boom"}
+
+
 def test_run_aborted_max_turns_event(tmp_path):
     path = tmp_path / "run2" / "transcript.jsonl"
     t = Transcript(path)

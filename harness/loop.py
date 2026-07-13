@@ -92,13 +92,28 @@ def _dispatch(tc, llm: LLM, policy: RunPolicy, transcript: Transcript, turn: int
     except ValidationError as e:
         transcript.validation_failed(turn, tc.name, str(e))
         return {"role": "tool", "tool_call_id": tc.id, "content": f"Error: invalid arguments -- {e}"}
-    if not policy.may_auto_run(skill, tc.arguments):
+    # validate_args() deliberately lets undeclared extra keys through (matches JSON
+    # Schema's additionalProperties:true default). skill.run() is a keyword-only
+    # Python function, though, so an extra key that legitimately passed validation
+    # would blow up with an uncaught TypeError. Filter down to the skill's declared
+    # schema properties before dispatch so that can't happen; keep the dropped keys
+    # around only to log them, never silently.
+    declared = set(skill.schema.get("properties", {}))
+    dispatch_args = {k: v for k, v in tc.arguments.items() if k in declared}
+    ignored = sorted(set(tc.arguments) - declared)
+    if not policy.may_auto_run(skill, dispatch_args):
         transcript.policy_blocked(turn, tc.name, tc.arguments)
         return {
             "role": "tool", "tool_call_id": tc.id,
             "content": "Error: this action requires approval, which hasn't been granted.",
         }
-    transcript.tool_called(turn, tc.name, tc.arguments)
-    result = skill.run(**tc.arguments)
+    transcript.tool_called(turn, tc.name, dispatch_args, ignored_args=ignored)
+    try:
+        result = skill.run(**dispatch_args)
+    except Exception as e:  # skill implementations are arbitrary; any of them can
+        # fail in ways we can't enumerate -- a failing skill must not crash the
+        # whole run() loop (same principle validation_failed exists for).
+        transcript.tool_failed(turn, tc.name, str(e))
+        return {"role": "tool", "tool_call_id": tc.id, "content": f"Error: skill execution failed -- {e}"}
     transcript.tool_result(turn, tc.name, result.content, result.metadata)
     return {"role": "tool", "tool_call_id": tc.id, "content": result.content}
