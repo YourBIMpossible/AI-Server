@@ -47,3 +47,15 @@ def test_parent_directory_is_created(tmp_path):
     t.run_started("r1", "task")
     t.close()
     assert path.exists()
+
+
+def test_event_is_visible_before_close(tmp_path):
+    path = tmp_path / "run" / "transcript.jsonl"
+    t = Transcript(path)
+    t.run_started("r1", "task")
+    # Read via the same path while `t` is still open (no close() yet) -- this only
+    # passes if _write() flushes immediately, since close() is what would normally
+    # force the OS buffer out.
+    line = json.loads(path.read_text(encoding="utf-8").strip())
+    assert line == {"event": "run_started", "run_id": "r1", "task": "task"}
+    t.close()
