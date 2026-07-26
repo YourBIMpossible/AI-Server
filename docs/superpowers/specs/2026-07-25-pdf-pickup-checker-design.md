@@ -241,8 +241,10 @@ finding toward `INDETERMINATE` — never silently treated as zero offset.
 ## 9. Error-handling posture: fail toward review
 
 A false `UNCHANGED`-when-verdict-should-be-CHANGED (a **false clear**) deletes a real missed
-pickup from the reviewer's attention, because `UNCHANGED` sorts first and reads as "handled."
-A false `CHANGED`-when-should-be-UNCHANGED (a **false flag**) costs the reviewer thirty
+pickup from the reviewer's attention: `UNCHANGED` is the top suspicion signal (§5), so a
+wrong `UNCHANGED` verdict doesn't hide the item — it *demotes the one signal meant to catch
+it*, which is functionally the same loss. A false `CHANGED`-when-should-be-UNCHANGED (a
+**false flag**) costs the reviewer thirty
 seconds. These are not symmetric costs, and the gates in §11 encode that asymmetry directly
 rather than leaving it as a design aspiration.
 
@@ -342,9 +344,13 @@ product goal of a scannable queue.
 ### 11.5 Golden set composition
 
 **6 jobs** (sized to cover the failure modes, not padded) spanning all three input modes and
-all three markup forms, with ≥15 markup instances per form. Labels built by correcting the
-tool's own proposals (per-field/per-region), reviewed by a human, versioned as `v1.0`. Grow
-the set only once v1.0 stops discriminating between good and bad runs.
+all three markup forms, with ≥15 markup instances per form. Labels start from the tool's own
+proposals (per-field/per-region) as a labeling aid, but **the labeler must be free to fully
+overwrite a proposal, not just edit it** — treat every proposed label as disposable, not as
+a default to be nudged. Anchoring on the tool's own output during golden-set creation would
+quietly bias the ground truth toward whatever the tool already believes, which defeats the
+point of an independent gate. Reviewed by a human, versioned as `v1.0`. Grow the set only
+once v1.0 stops discriminating between good and bad runs.
 
 **Sheet-matching rubric:** same sheet number + same discipline = matched. A renumbered/
 resheeted sheet is labeled matched with an explicit `note`, so the matcher isn't penalized
@@ -367,8 +373,10 @@ for a real-world renumber it had no way to detect from content alone.
 ## 13. Milestones
 
 1. **Detection core.** `ingest → sheets → geometry → markups → compare → verdict`, driven
-   entirely by the CLI + golden-set runner. No queue persistence, no UI. Ships when all four
-   gates pass on GoldenSet v1.0.
+   entirely by the CLI + golden-set runner. No queue persistence, no UI. Milestone complete
+   when all four gates pass on GoldenSet v1.0 — "complete" here means the milestone's exit
+   criteria are met, not that the tool is shipped/operational; that language is reserved for
+   later operational gates.
 2. **Review queue.** SQLite-backed `ReviewRecord`, local web UI (list + region crops +
    confirm/dismiss), sorted per §5.
 3. **PDF export.** Annotated-PDF output via reportlab — confirmed findings become real
