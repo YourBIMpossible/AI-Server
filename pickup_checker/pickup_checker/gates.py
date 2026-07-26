@@ -31,13 +31,19 @@ MARKUP_EXTRACTION_GATES_V1 = {
 }
 
 REGION_COMPARISON_GATE_V1 = {
-    # false_clear: tool said "fine" when the pickup was NOT done. This is the
-    # dangerous failure -- it deletes a real missed pickup from the queue.
-    "false_clear_max": 0.01,
-    # false_flag: tool flagged something already handled. Costs review time only,
-    # hence a 20x looser bound. The asymmetry IS the safety argument.
-    "false_flag_max": 0.20,
-    "indeterminate_max": 0.25,
+    # Key base names MUST match the metric names emitted by
+    # run_golden_eval.evaluate_region_comparison_metrics() -- "false_clear_rate",
+    # not "false_clear". A mismatch makes check_gate report "no data" for every
+    # metric, which still FAILS but for an entirely bogus reason. That exact bug
+    # shipped briefly and was caught only by running the dashboard.
+    #
+    # false_clear_rate: tool said "fine" when the pickup was NOT done. This is
+    # the dangerous failure -- it deletes a real missed pickup from the queue.
+    "false_clear_rate_max": 0.01,
+    # false_flag_rate: tool flagged something already handled. Costs review time
+    # only, hence a 20x looser bound. The asymmetry IS the safety argument.
+    "false_flag_rate_max": 0.20,
+    "indeterminate_rate_max": 0.25,
 }
 
 QUEUE_USEFULNESS_GATE_V1 = {

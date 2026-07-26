@@ -57,16 +57,38 @@ def test_check_gate_boundary_value_exactly_at_threshold_passes():
 
 
 def test_region_comparison_gate_v1_values_match_spec():
-    assert REGION_COMPARISON_GATE_V1["false_clear_max"] == 0.01
-    assert REGION_COMPARISON_GATE_V1["false_flag_max"] == 0.20
-    assert REGION_COMPARISON_GATE_V1["indeterminate_max"] == 0.25
+    assert REGION_COMPARISON_GATE_V1["false_clear_rate_max"] == 0.01
+    assert REGION_COMPARISON_GATE_V1["false_flag_rate_max"] == 0.20
+    assert REGION_COMPARISON_GATE_V1["indeterminate_rate_max"] == 0.25
 
 
 def test_false_clear_bound_is_far_tighter_than_false_flag():
     """The safety asymmetry is the whole point: a false clear hides a real
     missed pickup; a false flag only costs review time."""
-    assert (REGION_COMPARISON_GATE_V1["false_clear_max"]
-            < REGION_COMPARISON_GATE_V1["false_flag_max"] / 10)
+    assert (REGION_COMPARISON_GATE_V1["false_clear_rate_max"]
+            < REGION_COMPARISON_GATE_V1["false_flag_rate_max"] / 10)
+
+
+def test_every_gate_key_base_name_matches_a_real_metric_name():
+    """Regression guard for the naming-mismatch bug: a gate key whose base name
+    doesn't match the metric name makes check_gate report 'no data' for
+    everything -- which still FAILS, but for a completely bogus reason, so it
+    looks plausible while measuring nothing.
+
+    Verified against the real emitter rather than a hand-written list.
+    """
+    from run_golden_eval import evaluate_region_comparison_metrics
+    from pickup_checker.models import Verdict
+
+    real_metrics = evaluate_region_comparison_metrics(
+        [(Verdict.CHANGED, "CHANGED")]
+    )
+    for gate_key in REGION_COMPARISON_GATE_V1:
+        base = gate_key.rsplit("_", 1)[0]
+        assert base in real_metrics, (
+            f"gate key '{gate_key}' -> base '{base}' has no matching metric; "
+            f"emitter produces {sorted(real_metrics)}"
+        )
 
 
 def test_markup_extraction_gates_are_per_form_not_pooled():
