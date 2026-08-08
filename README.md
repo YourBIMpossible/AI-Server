@@ -52,6 +52,22 @@ address via `DICTATION_PROXY_HOST` / `DICTATION_PROXY_PORT` in `.env`). **Do not
 Agent or Chat through it — those scopes are supposed to answer/act, and the proxy's fallback
 would incorrectly discard legitimate agent responses.
 
+## Local coding agent (opencode)
+
+[opencode](https://github.com/anomalyco/opencode) wired to this box's Ollama endpoint, for
+single-file edits/docstrings/offline work — not part of the `aiserver/` package, a standalone
+consumer of the same Ollama instance. Manual start/stop only (no autostart, no scheduled task):
+
+- **"OpenCode"** desktop/Start Menu shortcut — starts the web UI at `127.0.0.1:4096`, warms the
+  model, opens the browser.
+- **"OpenCode - Shut Down"** — evicts the model from VRAM, stops the server. Use before
+  gaming/Revit.
+
+Uses `qwen3-coder:30b-a3b-q4_K_M` (derived `qwen3-coder-32k`, `num_ctx=32768` baked in), **not**
+the `qwen2.5-coder:14b` workhorse above — that model cannot emit real tool calls and can't drive
+an agent loop. Details, verification, and the full model story: `PROGRAM_PLAN.md` → "Local coding
+agent". Scripts: `F:\AI-Dev\.tools\opencode\`.
+
 ## Move to the 3090 box later
 
 See `relocate.md`. Short version: run `scripts/setup-linux.sh` on the box, then set

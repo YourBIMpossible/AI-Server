@@ -5,6 +5,13 @@ Project: a portable, fully-local LLM inference + automation platform. Dev on the
 changing `OLLAMA_HOST` in `.env`. See `PROGRAM_PLAN.md` for the program and `handoffs/` for
 per-work-package specs.
 
+## Target box (not yet operational — waiting on CPU cooler)
+
+i9-14900K / RTX 3090 24GB / 4 drives (layout TBD). Inference stack: **vLLM** for production,
+**Ollama** for the dev loop; fully local, no external LLM calls. Planned one-DB-per-drive
+layout: PostgreSQL + TimescaleDB (relational + time series) · Qdrant (vectors/RAG) · model
+storage (GGUF/safetensors) · MongoDB or SQLite (logs, cold storage, BIM exports).
+
 ## House style (canonical)
 
 Follow `F:\AI-Dev\system\WORKING-STYLE.md` and `F:\AI-Dev\system\SYSTEM-RULES.md`.

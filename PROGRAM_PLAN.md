@@ -14,7 +14,35 @@ A fully-local, always-on AI automation platform you own end to end. Local models
 ## Where we are
 
 - **Done + validated:** Ollama runtime + OpenAI-compatible endpoint (Stage 1); `daily_digest.py` first automation (Stage 2). End-to-end tested against a mock endpoint; scripts parse; relocation path written (`relocate.md`).
+- **Done + validated (2026-07-25):** local coding-agent piece of WP-G, ahead of the rest of that work package — see below.
 - **Now:** turn the scaffold into a real platform — a shared library, RAG, an automation suite, and integration with your existing stack (Dashboard, PC-Monitor, scheduled tasks).
+
+## Local coding agent (WP-G piece, built early)
+
+opencode (`anomalyco/opencode`, the open-source coding agent formerly at `sst/opencode`) wired to
+this box's Ollama endpoint, launched from two manual desktop buttons — no autostart, no scheduled
+task, matches how the user runs Claude Code sessions (start when wanted, close when done).
+
+- **Model — separate from the WP config-driven workhorse above, and not interchangeable with it:**
+  `qwen2.5-coder:14b` cannot drive an agent loop — it returns tool calls as plain text with
+  `tool_calls` empty, so opencode reads intent and never executes (known upstream:
+  anomalyco/opencode#7030). It stays correct as the *chat/summarization* workhorse in
+  `config/models.txt` for the digest/RAG automations, which never call tools. The agent needs
+  `qwen3-coder:30b-a3b-q4_K_M`, pinned via digest `06c1097efce0`, with a derived model
+  `qwen3-coder-32k` (digest `720a215260c5`) baking in `num_ctx=32768` — `OLLAMA_CONTEXT_LENGTH`
+  is not honored by this Ollama build (0.31.1). Verified end-to-end: Glob → Read → Edit, file
+  change confirmed on disk by hash.
+- **Launch:** `F:\AI-Dev\.tools\opencode\Start-OpenCodeWeb.ps1` (desktop/Start Menu shortcut
+  "OpenCode") starts the web UI on `127.0.0.1:4096` if not already running, warms the model in
+  the background, opens the browser. `Stop-OpenCode.ps1` ("OpenCode - Shut Down") evicts the
+  model from VRAM and stops the server — use before gaming/Revit.
+- **Not part of the `aiserver/` package** — it's a standalone consumer of the same Ollama
+  instance, outside the portability contract (host/model hard-coded in the launcher scripts,
+  not `.env`-driven). Fine for a manually-run local tool; would need rework before relocating
+  to the 3090 box under WP-E.
+- **Reality check:** ~167s for a trivial two-line single-file edit on this box's 5080 (66% GPU
+  offload, the rest CPU — the 18GB model doesn't fully fit 16GB VRAM). Good for single-file
+  edits, docstrings, offline/private work. Not a substitute for Claude Code on multi-file work.
 
 ## Architecture (target)
 
@@ -42,7 +70,7 @@ Core (build now, on the 5080) → then relocate. Optional/advanced (opt-in) list
 | **D — Integration** | Dashboard "AI Server" tab + a PC-Monitor profile for GPU/inference; offload one real scheduled task to the local endpoint. | Yes | A (C for outputs) | `handoffs/WP-D_integration.md` |
 | **E — Serving & ops** | Container hardening (healthchecks, model preload), Tailscale, optional Caddy API-key, autostart, endpoint-down alerting. | Partial now, finish on box | A | outlined below |
 | **F — Eval harness** | A small labeled test set; compare local output vs a Claude baseline on the digest/RAG tasks; pick per-task models on evidence. | Yes | A, B, C | outlined below |
-| **G — Advanced (optimistic)** | Local Whisper meeting-note transcription; a local coding-agent for bulk chores; QLoRA fine-tune on your decision-log/writing voice (the 3090 can QLoRA small models). | Box-class | A–C | outlined below |
+| **G — Advanced (optimistic)** | Local Whisper meeting-note transcription; a local coding-agent for bulk chores (**coding-agent piece done 2026-07-25** — see "Local coding agent" above); QLoRA fine-tune on your decision-log/writing voice (the 3090 can QLoRA small models). | Box-class | A–C | outlined below |
 
 ## Sequencing & parallelization (for Claude Code)
 
@@ -73,7 +101,7 @@ At that point the box adds only **more VRAM (bigger models) + always-on dedicate
 
 - **Local ≠ Claude on hard reasoning.** Use local models for bulk/templated/private work; route hard tasks to Claude. The eval harness (WP-F) keeps this honest per task.
 - **16GB → 24GB gap:** you dev on smaller models on the 5080; the box runs bigger ones. Re-check the eval bar on the box's model before trusting a job there.
-- **Qwen3.6 + Ollama:** newest GGUFs need llama.cpp; default workhorse is `qwen2.5-coder:14b` until Ollama catches up (`relocate.md`).
+- **Qwen3.6 + Ollama:** newest GGUFs need llama.cpp; default workhorse is `qwen2.5-coder:14b` until Ollama catches up (`relocate.md`). This is correct for the chat/summarization automations (digest, RAG) — they never call tools. It does **not** extend to agentic/tool-calling use; see "Local coding agent" above for what was verified and why a different model is required there.
 - **Email triage** (tempting) needs Gmail API creds on the box — the Cowork Gmail connector can't be called from a headless script. Parked as optional, not core.
 - **Security:** endpoint stays on the tailnet/LAN; never port-forwarded. Add an API key (Caddy) before any non-trivial exposure.
 
