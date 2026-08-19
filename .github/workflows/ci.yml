@@ -1,13 +1,20 @@
 name: CI
 
+# DRAFT GATE (2026-08-19, cost control): main has no branch protection here, so the push
+# trigger stays — it's the only CI signal for a direct push. The pull_request lane alone gets
+# a draft==false gate: a WIP branch living as a draft PR can be pushed to freely without
+# spending runner minutes on every intermediate commit. ready_for_review is in the trigger
+# types so checks fire the moment the draft flips to ready.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
