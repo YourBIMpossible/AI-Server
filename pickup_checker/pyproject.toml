@@ -1,0 +1,20 @@
+[project]
+name = "pickup-checker"
+version = "0.1.0"
+description = "Markup-anchored PDF pickup checker (detection core, Milestone 1)"
+requires-python = ">=3.12"
+dependencies = [
+    "pdfplumber==0.11.10",
+    "pypdfium2==5.12.1",
+    "reportlab==5.0.0",
+    "numpy==2.5.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[tool.setuptools.packages.find]
+include = ["pickup_checker*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
