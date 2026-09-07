@@ -9,6 +9,7 @@ import pytest
 
 from aiserver.client import LLM, LLMError
 from aiserver.config import load_config
+from conftest import _running, _sequenced_server
 
 
 def _cfg(tmp_path, host):
@@ -31,42 +32,6 @@ def test_endpoint_down_raises(tmp_path):
 
 
 # --- CLIENT-1: HTTPError must not be swallowed by the URLError branch -----
-
-
-def _sequenced_server(responses):
-    """responses: list of (status_code, json_body); last entry repeats once exhausted."""
-
-    class Handler(BaseHTTPRequestHandler):
-        calls = 0
-
-        def do_POST(self):
-            n = int(self.headers.get("Content-Length", 0))
-            self.rfile.read(n)
-            idx = min(Handler.calls, len(responses) - 1)
-            Handler.calls += 1
-            code, obj = responses[idx]
-            body = json.dumps(obj).encode()
-            self.send_response(code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, *a):
-            pass
-
-    return HTTPServer(("127.0.0.1", 0), Handler), Handler
-
-
-@contextmanager
-def _running(srv):
-    port = srv.server_address[1]
-    t = threading.Thread(target=srv.serve_forever, daemon=True)
-    t.start()
-    try:
-        yield f"http://127.0.0.1:{port}"
-    finally:
-        srv.shutdown()
 
 
 def test_4xx_is_not_retried_and_surfaces_server_body(tmp_path):

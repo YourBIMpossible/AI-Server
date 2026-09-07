@@ -9,6 +9,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass, field
 from typing import Any
 
 from .config import Config, load_config
@@ -16,6 +17,20 @@ from .config import Config, load_config
 
 class LLMError(RuntimeError):
     """Endpoint unreachable, or an unexpected response shape."""
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    id: str
+    name: str
+    arguments: dict[str, Any]
+    parse_error: str | None = None
+
+
+@dataclass(frozen=True)
+class ChatMessage:
+    content: str | None
+    tool_calls: list[ToolCall] = field(default_factory=list)
 
 
 class LLM:
@@ -72,6 +87,71 @@ class LLM:
             f"(OLLAMA_HOST={self.cfg.ollama_host})?"
         )
 
+    def chat_message(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None = None,
+        temperature: float = 0.2,
+        tools: list[dict[str, Any]] | None = None,
+        **opts: Any,
+    ) -> ChatMessage:
+        payload = {
+            "model": model or self.cfg.model,
+            "messages": messages,
+            "stream": False,
+            "temperature": temperature,
+            **opts,
+        }
+        if tools is not None:
+            payload["tools"] = tools
+        data = self._post("/v1/chat/completions", payload)
+        try:
+            raw = data["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise LLMError(f"Unexpected chat response shape: {e}") from e
+        content = raw.get("content")
+        tool_calls = [
+            self._normalize_tool_call(i, tc) for i, tc in enumerate(raw.get("tool_calls") or [])
+        ]
+        if not (content and content.strip()) and not tool_calls:
+            raise LLMError(
+                "Model returned neither content nor tool_calls (empty response) -- "
+                "known Ollama failure mode with tool_choice + a large system prompt"
+            )
+        return ChatMessage(content=content, tool_calls=tool_calls)
+
+    @staticmethod
+    def _normalize_tool_call(index: int, raw: dict[str, Any]) -> ToolCall:
+        """Absorb Ollama/OpenAI wire differences: id is frequently missing, and
+        `arguments` comes back as either a JSON string or an already-parsed dict
+        depending on model/backend. A malformed `arguments` is recorded on
+        `parse_error`, never raised -- that's the harness loop's call to make
+        (recoverable model mistake, not a transport failure)."""
+        call_id = raw.get("id") or f"call_{index}"
+        fn = raw.get("function") or {}
+        name = fn.get("name", "")
+        raw_args = fn.get("arguments", {})
+        if isinstance(raw_args, dict):
+            return ToolCall(id=call_id, name=name, arguments=raw_args)
+        if isinstance(raw_args, str):
+            if not raw_args.strip():
+                return ToolCall(id=call_id, name=name, arguments={})
+            try:
+                parsed = json.loads(raw_args)
+            except json.JSONDecodeError as e:
+                return ToolCall(id=call_id, name=name, arguments={}, parse_error=f"arguments is not valid JSON: {e}")
+            if isinstance(parsed, dict):
+                return ToolCall(id=call_id, name=name, arguments=parsed)
+            return ToolCall(
+                id=call_id, name=name, arguments={},
+                parse_error=f"arguments parsed to {type(parsed).__name__}, expected an object",
+            )
+        return ToolCall(
+            id=call_id, name=name, arguments={},
+            parse_error=f"arguments has unsupported type {type(raw_args).__name__}",
+        )
+
     def chat(
         self,
         messages: list[dict[str, str]],
@@ -80,18 +160,7 @@ class LLM:
         temperature: float = 0.2,
         **opts: Any,
     ) -> str:
-        payload = {
-            "model": model or self.cfg.model,
-            "messages": messages,
-            "stream": False,
-            "temperature": temperature,
-            **opts,
-        }
-        data = self._post("/v1/chat/completions", payload)
-        try:
-            return data["choices"][0]["message"]["content"].strip()
-        except (KeyError, IndexError, TypeError) as e:
-            raise LLMError(f"Unexpected chat response shape: {e}") from e
+        return (self.chat_message(messages, model=model, temperature=temperature, **opts).content or "").strip()
 
     def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         payload = {"model": model or self.cfg.embed_model, "input": texts}
