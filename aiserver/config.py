@@ -15,7 +15,7 @@ _DEFAULTS = {
     "OLLAMA_HOST": "http://localhost:11434",
     "MODEL": "qwen2.5-coder:14b",
     "EMBED_MODEL": "nomic-embed-text",
-    "WORKSPACE": r"F:\AI-Dev",
+    "WORKSPACE": r"F:\BIMpossible-Workspace",
     "OUT": "./out",
     "DIGEST_DAYS": "7",
     "EVAL_PASS_THRESHOLD": "0.8",

@@ -113,7 +113,7 @@ At that point the box adds only **more VRAM (bigger models) + always-on dedicate
 
 ## How to pass to Claude Code
 
-1. Open a Claude Code session in `F:\AI-Dev\AI-Server\`.
+1. Open a Claude Code session in `F:\AI-Server\`.
 2. Paste the relevant `handoffs/WP-*.md` as the task. Each is self-contained: context, deliverables, acceptance tests, constraints.
 3. House style applies — see `AI-Server/CLAUDE.md` (points to `system/WORKING-STYLE.md` + `system/SYSTEM-RULES.md`). Tests + acceptance criteria are the definition of done.
 4. Independent WPs → separate parallel sessions (see the wave map).

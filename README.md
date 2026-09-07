@@ -14,7 +14,7 @@ points them at the box's GPU.
 ## Run here now (Windows, RTX 5080)
 
 ```powershell
-cd F:\AI-Dev\AI-Server
+cd F:\AI-Server
 copy .env.example .env
 # 1. install Ollama + pull models + smoke test
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-windows.ps1
