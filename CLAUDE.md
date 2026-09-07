@@ -14,7 +14,7 @@ storage (GGUF/safetensors) · MongoDB or SQLite (logs, cold storage, BIM exports
 
 ## House style (canonical)
 
-Follow `F:\AI-Dev\system\WORKING-STYLE.md` and `F:\AI-Dev\system\SYSTEM-RULES.md`.
+Follow `F:\Claude-Profile\docs\system\WORKING-STYLE.md` and `F:\Claude-Profile\docs\system\SYSTEM-RULES.md`.
 
 - Build exactly the work package asked; flag a worthwhile scope expansion in one line, don't add it silently.
 - Optimization priority: correctness → security → performance → simpler architecture.
@@ -32,7 +32,7 @@ Follow `F:\AI-Dev\system\WORKING-STYLE.md` and `F:\AI-Dev\system\SYSTEM-RULES.md
 ## Layout
 
 See `README.md`. Code: `aiserver/` (package), `automation/` (jobs), `rag/` (WP-B),
-`scripts/` (setup), and a Dashboard tab under `F:\AI-Dev\Dashboard\` (WP-D). Tests in `tests/`.
+`scripts/` (setup), and a Dashboard tab in the AI-Dev Dashboard repo (WP-D). Tests in `tests/`.
 
 ## Validate
 
