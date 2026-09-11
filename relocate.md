@@ -4,7 +4,7 @@ Your automations keep running on your main rig (that's where the files are); onl
 inference endpoint moves.
 
 > **Corrected 2026-09-10.** This doc used to say relocation was "a config change, not a
-> rebuild" and that `OLLAMA_HOST` was the only line that changes. That was wrong in a way
+> rebuild" and that the endpoint setting was the only line that changes. That was wrong in a way
 > that matters: the *serving-layer* environment — flash attention, context length,
 > keep-alive — lives on the host running Ollama, is not carried by `.env`, and is worth up
 > to ~150× on prefill. `scripts/setup-linux.sh` now sets it. The rig-side change really is
@@ -43,7 +43,7 @@ inference endpoint moves.
 Edit `.env`:
 
 ```
-OLLAMA_HOST=http://<box-hostname-or-tailscale-name>:11434
+INFERENCE_BASE_URL=http://<box-hostname-or-tailscale-name>:11434/v1
 ```
 
 That's it. `daily_digest.py` (and every future automation) now runs on the box's GPU.
@@ -51,10 +51,11 @@ Re-run `register-tasks-windows.ps1` only if you changed the schedule.
 
 ## Networking & security
 
-- Prefer **Tailscale**: install it on both machines and use the box's Tailscale name as
-  `OLLAMA_HOST`. Avoids exposing the endpoint to your whole LAN, and works off-network.
+- Prefer **Tailscale**: install it on both machines and use the box's Tailscale name in
+  `INFERENCE_BASE_URL`. Avoids exposing the endpoint to your whole LAN, and works off-network.
 - **Never port-forward 11434 to the public internet.**
-- If you want auth, put Caddy in front of Ollama and require an API key.
+- If you want auth, put Caddy in front of the endpoint and require an API key; set that key as
+  `INFERENCE_API_KEY` on the rig.
 
 ## Newest models on the box
 

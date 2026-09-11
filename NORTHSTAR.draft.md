@@ -10,9 +10,15 @@ status: draft
 
 ## Mission
 
-Stand up and keep one dedicated, headless, always-on local inference endpoint that internal
-tooling can rely on — and make local-model performance **measurable**, so decisions about
-what to run locally are settled by evidence rather than by vibes or by a blog post.
+Stand up and keep one dedicated, headless, always-on, **OpenAI-compatible** local inference
+endpoint that internal tooling can rely on — and make local-model performance **measurable**,
+so decisions about what to run locally are settled by evidence rather than by vibes or by a
+blog post.
+
+The mission is the *endpoint*, not the program serving it. Ollama is the initial baseline
+runner and nothing more; it has not won anything yet. Clients know three settings —
+`INFERENCE_BASE_URL`, `INFERENCE_API_KEY`, `INFERENCE_MODEL` — and no runner name appears in
+application code, config keys, or automations.
 
 ## Why this framing, and not the old one
 
@@ -41,13 +47,23 @@ The box is not "more VRAM for bigger models." It's the instrument.
 - At least one real automation runs unattended against it and clears the WP-F bar — where
   WP-F scores **semantics, not just schema validity**.
 - Model choice is a config line backed by an eval score, not a name copied out of a doc.
+- The runner has been chosen by the WP-H bakeoff, not by whichever one got installed first —
+  and swapping it is provably a deployment change, demonstrated by the full WP-F workload plus
+  one unattended real automation passing against the replacement. `/v1/models` answering is
+  not acceptance.
 
 ## Off-limits
 
 - **No public exposure.** LAN/Tailscale only. Never port-forward 11434.
 - **No client data on this box** until the OCR hard stop of 2026-08-24 is resolved on its
   own terms. That's a separate decision with its own gate.
-- **No vLLM** unless single-user stops being true — Ampere gets nothing from it.
+- **No runner declared permanent without winning the bakeoff.** That cuts both ways: Ollama
+  doesn't get to stay by default, and llama.cpp doesn't get adopted on reputation. vLLM is
+  excluded on a specific technical reading — Ampere has no FP8 hardware and the workload is
+  single-user, so continuous batching has nothing to bite on. If either of those stops being
+  true, that exclusion is void and vLLM re-enters the bakeoff like anything else.
+- **No runner name in client code, config keys, or automations.** Ollama-native calls live
+  only in `scripts/` ops tooling, as enrichment that degrades cleanly.
 - **No porting the rig's numbers.** Hardware profile is part of batch identity; every
   measurement taken on the 5080 is void here. Re-measure.
 - **Not a desktop.** The moment this box runs a game or Revit, it stops being the thing

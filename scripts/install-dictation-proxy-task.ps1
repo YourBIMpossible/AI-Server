@@ -57,7 +57,7 @@ $listening = Test-ProxyPortOpen
 Write-Host ""
 if ($listening) {
     Write-Host "Done. Starts automatically at every logon: $state" -ForegroundColor Green
-    Write-Host "Listening at http://${proxyHost}:${proxyPort} -> forwards to Ollama at OLLAMA_HOST" -ForegroundColor Cyan
+    Write-Host "Listening at http://${proxyHost}:${proxyPort} -> forwards to INFERENCE_BASE_URL" -ForegroundColor Cyan
     Write-Host "(override the listen address via DICTATION_PROXY_HOST / DICTATION_PROXY_PORT in .env)" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "In OpenWhispr, set the Self-Hosted endpoint URL for Dictation Cleanup" -ForegroundColor Yellow

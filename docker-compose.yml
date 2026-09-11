@@ -2,6 +2,10 @@
 # Requires the NVIDIA Container Toolkit on the host for GPU access.
 # Start:  docker compose up -d
 # Pull a model:  docker compose exec ollama ollama pull qwen2.5-coder:32b
+#
+# This file deploys ONE runner (Ollama, the current baseline). Clients never know that:
+# they only see INFERENCE_BASE_URL pointing at the OpenAI-compatible surface below, so a
+# different runner is a different service block here, not a change in the application.
 services:
   ollama:
     image: ollama/ollama:latest
@@ -12,7 +16,25 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     environment:
+      # Server-side bind address. NOT the client setting -- clients use INFERENCE_BASE_URL.
       - OLLAMA_HOST=0.0.0.0:11434
+      # Serving layer. These are worth up to ~150x on prefill and they default to OFF /
+      # 4096 tokens, which silently truncates a 27k-token prompt. Keep in step with
+      # scripts/setup-linux.sh, and verify from the server's startup banner, not the shell.
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_CONTEXT_LENGTH=32768
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=2
+    # Health is defined as "the portable contract answers", not "the Ollama process is
+    # alive" -- the same check a replacement runner has to pass. (Needs curl in the image;
+    # a runner image without it needs its own equivalent of this request.)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/v1/models >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         reservations:

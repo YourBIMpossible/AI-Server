@@ -16,7 +16,7 @@ def _load(name: str, relpath: str):
 
 
 def test_smoke_test_ok_against_mock(mock_endpoint, monkeypatch, capsys):
-    monkeypatch.setenv("OLLAMA_HOST", mock_endpoint)
+    monkeypatch.setenv("INFERENCE_BASE_URL", mock_endpoint)
     mod = _load("smoke_test", "scripts/smoke-test.py")
     assert mod.main() == 0
     out = capsys.readouterr().out

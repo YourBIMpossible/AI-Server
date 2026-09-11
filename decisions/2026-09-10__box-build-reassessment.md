@@ -193,3 +193,74 @@ the rig while classification sat at 8/10.
 `F:\AI-Dev` was purged from *this repo's config and docs* on 2026-09-07 but **still exists
 on disk** — the opencode launchers under `F:\AI-Dev\.tools\opencode\` still resolve. An
 earlier reading that the directory was deleted is wrong.
+
+---
+
+# Addendum — 2026-09-11: the runner is not the mission
+
+**Origin:** owner critique, same day. Verbatim premise: *"Ollama is not the only option, and
+it should not become an unexamined platform dependency."*
+
+## What was wrong with the doc above
+
+The critique is correct and it lands on this document. The reassessment carried real evidence
+about the *serving layer* — flash attention, `OLLAMA_CONTEXT_LENGTH`, `OLLAMA_KEEP_ALIVE`,
+`OLLAMA_KV_CACHE_TYPE` — and those findings are sound. But Ollama was the carrier for all of
+them, so a page of wins for **configuration** read as a page of wins for **Ollama**. Nothing
+above ever argued that Ollama should be the serving standard. It just never argued that it
+shouldn't, and inevitability grew in the gap.
+
+That was already ossifying in code: `.env.example` named the client's endpoint setting
+`OLLAMA_HOST`, so every consumer inherited a runner name for what is merely an HTTP contract.
+Worse, it was a live footgun — `config.py` reads process env for any key it knows, and
+`OLLAMA_HOST=0.0.0.0:11434` is exactly what Ollama's own docs tell you to export **on the
+box**. A shell that had it set would have silently repointed every client at a bind address.
+
+## The decision
+
+**What is being built is a private, headless, OpenAI-compatible inference endpoint.** Ollama
+is the initial baseline runner. Runner selection remains an evidence-backed decision.
+
+Adopted verdicts:
+
+| Claim | Verdict |
+|---|---|
+| Dedicated headless Linux box | Strong case — unchanged from above |
+| Private OpenAI-compatible endpoint | Strong case |
+| Ollama as *initial baseline* | Reasonable |
+| Ollama as *permanent serving standard* | **Unproven. Uncommitted.** |
+| vLLM on a single-user 3090 | Not justified — no FP8 on Ampere, nothing for batching to do |
+| llama.cpp as contender | Worth evaluating, once the box is operational |
+
+## What changed in the repo (2026-09-11)
+
+Client configuration is now decoupled from Ollama configuration:
+
+- `OLLAMA_HOST` → `INFERENCE_BASE_URL` (carries `/v1`; a bare host:port is normalized, an
+  explicit path is respected). `OLLAMA_API_KEY` → `INFERENCE_API_KEY`. `MODEL` /
+  `EMBED_MODEL` → `INFERENCE_MODEL` / `INFERENCE_EMBED_MODEL`, documented to prefer a
+  **server-side alias** (`local-workhorse`) over a runner-specific pull tag.
+- `config.py` **raises** on any stale key rather than silently falling back to a default —
+  except when the new name is also present, since `OLLAMA_HOST` remains legitimate on the box
+  as a *server bind address*. Two meanings, one name, now unambiguous.
+- `client.py` was already clean (`/v1/*`, no CLI shellouts); `ping()` moved from Ollama's
+  `/api/tags` to the portable `/v1/models`. No adapter layer was needed — worth stating, since
+  the cost of neutrality here turned out to be naming, not architecture.
+- `aiserver_status.py`: liveness and the model list come from `/v1/models`; `/api/ps` (loaded
+  models + VRAM, no OpenAI equivalent) is demoted to best-effort enrichment behind a
+  `models_loaded_supported` flag. Runner-native detail is *declared missing*, never a failure.
+- `docker-compose.yml` healthcheck now asserts `/v1/models`, and gained the serving-layer env
+  the compose path was missing (the same defect found in `setup-linux.sh`).
+- New: `handoffs/WP-H_runner-bakeoff.md` — the bounded Ollama-vs-llama.cpp test.
+
+## The gate
+
+**Portability is a gate, not a promise.** `/v1/models` answering is not acceptance. "OpenAI-
+compatible" says nothing about chat-template behavior, tool-call serialization, JSON-schema
+constrained generation, streaming semantics, embedding endpoints, tokenization and context
+accounting, model aliasing, or error and retry behavior — each can differ silently while
+everything appears to work.
+
+A runner is adopted only when the **full WP-F workload passes semantically against it** *and*
+**a real automation completes unattended on its own schedule**. Until then, no runner is
+permanent — including the one currently installed.

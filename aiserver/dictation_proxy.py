@@ -259,7 +259,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default=None, help="defaults to DICTATION_PROXY_HOST from .env")
     parser.add_argument("--port", type=int, default=None, help="defaults to DICTATION_PROXY_PORT from .env")
-    parser.add_argument("--upstream", default=None, help="defaults to OLLAMA_HOST from .env")
+    parser.add_argument(
+        "--upstream", default=None, help="defaults to INFERENCE_BASE_URL from .env"
+    )
     args = parser.parse_args()
 
     cfg = load_config()

@@ -6,8 +6,11 @@ WP-A (WP-C for D1's job outputs). The three halves are independent — up to thr
 ## D1 — Dashboard "AI Server" tab (`F:\AI-Dev\Dashboard\`)
 
 - Add a tab/panel to the existing dashboard (`index.html` + a new `aiserver.js` + data in
-  `data.js`). Show: endpoint up/down, models loaded (`GET /api/tags`), and the last
-  digest/rollup/drift result + timestamp (read the newest files in `AI-Server/out/`).
+  `data.js`). Show: endpoint up/down and available models from the portable
+  `GET /v1/models`, plus the last digest/rollup/drift result + timestamp (read the newest
+  files in `AI-Server/out/`). Loaded-model detail comes from Ollama's `/api/ps`, which no
+  other runner serves — render it only when `models_loaded_supported` is true, never as a
+  failure. `scripts/aiserver_status.py` already returns exactly this shape.
 - **Respect `Dashboard/REFRESH-SPEC.md`:** read-only refresh, only write `data.js`, terse
   one-line entries, no git mutations beyond the existing push step.
 - **Acceptance:** the tab renders endpoint status + last-job summaries; a refresh updates it

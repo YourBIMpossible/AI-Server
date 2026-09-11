@@ -6,10 +6,13 @@ A portable local-LLM inference stack: an always-on, OpenAI-compatible endpoint y
 automations call. Built to **run on your current rig (RTX 5080) now** and **relocate to the
 dedicated 3090 box** later by changing one line.
 
-**Design principle:** the runtime (Ollama) and the automations are decoupled. Only
-`OLLAMA_HOST` and the model name differ between machines; every script and config moves
-unchanged. The automations run wherever your files are (your main rig) — relocating just
-points them at the box's GPU.
+**Design principle:** the automations depend on an *OpenAI-compatible HTTP endpoint*, never on
+the program serving it. Ollama is the current baseline runner and is still being evaluated
+against llama.cpp (`handoffs/WP-H_runner-bakeoff.md`); swapping it should not touch a line of
+application code. Clients see exactly three settings — `INFERENCE_BASE_URL`,
+`INFERENCE_API_KEY`, `INFERENCE_MODEL` — and every script and config moves between machines
+unchanged. The automations run wherever your files are (your main rig); relocating just points
+them at the box's GPU.
 
 ## Run here now (Windows, RTX 5080)
 
@@ -70,8 +73,11 @@ agent". Scripts: `F:\AI-Dev\.tools\opencode\`.
 
 ## Move to the 3090 box later
 
-See `relocate.md`. Short version: run `scripts/setup-linux.sh` on the box, then set
-`OLLAMA_HOST=http://<box>:11434` in `.env`. Nothing else changes.
+See `relocate.md` — and read it, because "one line in `.env`" was wrong: the serving-layer
+environment on the box (flash attention, context length, keep-alive) is worth up to ~150x on
+prefill and does not live in this repo's config. Short version: run `scripts/setup-linux.sh` on
+the box, verify the settings from the server's own startup banner, then set
+`INFERENCE_BASE_URL=http://<box>:11434/v1` in `.env`.
 
 ## Layout
 

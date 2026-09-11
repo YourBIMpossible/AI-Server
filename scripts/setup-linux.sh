@@ -74,4 +74,4 @@ done
 # 4. Smoke test (uses .env if present).
 python3 "$ROOT/scripts/smoke-test.py"
 echo "Done. Endpoint live on the LAN at http://$(hostname -I | awk '{print $1}'):11434/v1"
-echo "On your main rig, set OLLAMA_HOST to that address in .env."
+echo "On your main rig, set INFERENCE_BASE_URL to that address (with /v1) in .env."

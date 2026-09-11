@@ -9,7 +9,9 @@
 
 ## Vision
 
-A fully-local, always-on AI automation platform you own end to end. Local models on your own GPU do the recurring, bulk, and private work — summaries, RAG over your own docs, classification, drift detection, batch dev chores — at zero per-token cost. Claude stays for heavy reasoning and the build itself. Everything is config-driven and portable: it runs on the 5080 today and moves to the 3090 box by changing one line (`OLLAMA_HOST`).
+A fully-local, always-on AI automation platform you own end to end. Local models on your own GPU do the recurring, bulk, and private work — summaries, RAG over your own docs, classification, drift detection, batch dev chores — at zero per-token cost. Claude stays for heavy reasoning and the build itself. Everything is config-driven and portable: it runs on the 5080 today and moves to the 3090 box by repointing `INFERENCE_BASE_URL` (plus setting up the box's serving layer, which is not a repo config change — see `relocate.md`).
+
+**What is actually being built:** a private, headless, OpenAI-compatible inference endpoint. Ollama is the initial baseline runner; runner selection remains an evidence-backed decision, settled by `handoffs/WP-H_runner-bakeoff.md`, not by inertia.
 
 ## Where we are
 
@@ -47,10 +49,17 @@ task, matches how the user runs Claude Code sessions (start when wanted, close w
 ## Architecture (target)
 
 ```
-                ┌──────── the 3090 box (later) / your 5080 (now) ────────┐
- automations ─▶ │  aiserver/ (shared lib) ─▶ Ollama ─▶ OpenAI API :11434 │
- RAG queries ─▶ │  client · config · prompts · logging   (chat + embed)  │
-                └────────────────────────────────────────────────────────┘
+ automations ─▶ ┌─ aiserver/ (shared lib) ─┐    the contract: an OpenAI-compatible HTTP API
+ RAG queries ─▶ │ client·config·prompts·log│ ─▶ /v1/chat/completions · /v1/embeddings
+ the rig       └──────────────────────────┘        /v1/models     (INFERENCE_BASE_URL)
+                                                              │
+                ┌───── the 3090 box (later) / your 5080 (now) ─▼─────────┐
+                │  ONE runner serves that API on :11434                  │
+                │    Ollama      — initial baseline, under evaluation    │
+                │    llama.cpp   — contender (WP-H bakeoff)              │
+                │    vLLM        — excluded: no FP8 on Ampere, 1 user    │
+                └───────────────────────────────────────────────────────┘
+   Swapping the runner is a deployment change. No application code moves.
        │                     │                          │
    out/*.md            vector store (sqlite-vec)    Dashboard tab + PC-Monitor panels
                                                     (status · GPU · last job)
@@ -70,6 +79,7 @@ Core (build now, on the 5080) → then relocate. Optional/advanced (opt-in) list
 | **D — Integration** | Dashboard "AI Server" tab + a PC-Monitor profile for GPU/inference; offload one real scheduled task to the local endpoint. | Yes | A (C for outputs) | `handoffs/WP-D_integration.md` |
 | **E — Serving & ops** | Container hardening (healthchecks, model preload), Tailscale, optional Caddy API-key, autostart, endpoint-down alerting. | Partial now, finish on box | A | outlined below |
 | **F — Eval harness** | A small labeled test set; compare local output vs a Claude baseline on the digest/RAG tasks; pick per-task models on evidence. | Yes | A, B, C | outlined below |
+| **H — Runner bakeoff** | Settle Ollama vs llama.cpp on evidence under a frozen protocol; portability treated as a gate (WP-F workload + an unattended real automation), not as a `/v1/models` ping. | On box | box operational, F | `handoffs/WP-H_runner-bakeoff.md` |
 | **G — Advanced (optimistic)** | Local Whisper meeting-note transcription; a local coding-agent for bulk chores (**coding-agent piece done 2026-07-25** — see "Local coding agent" above); QLoRA fine-tune on your decision-log/writing voice (the 3090 can QLoRA small models). | Box-class | A–C | outlined below |
 
 ## Sequencing & parallelization (for Claude Code)

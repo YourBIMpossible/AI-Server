@@ -13,7 +13,7 @@ from conftest import _running, _sequenced_server
 
 
 def _cfg(tmp_path, host):
-    return load_config(dotenv=tmp_path / "none.env", overrides={"OLLAMA_HOST": host})
+    return load_config(dotenv=tmp_path / "none.env", overrides={"INFERENCE_BASE_URL": host})
 
 
 def test_chat_and_embed(mock_endpoint, tmp_path):
@@ -185,6 +185,72 @@ def test_no_api_key_omits_authorization_header(tmp_path):
         llm = LLM(_cfg(tmp_path, url))  # no api_key configured
         llm.chat([{"role": "user", "content": "hi"}])
     assert captured.get("authorization") is None
+
+
+def test_api_key_comes_from_config_without_being_passed(tmp_path):
+    """INFERENCE_API_KEY in config is enough -- no caller has to thread the key
+    through, which is what keeps gateway auth out of every automation."""
+    srv, captured = _header_capturing_server()
+    with _running(srv) as url:
+        cfg = load_config(
+            dotenv=tmp_path / "none.env",
+            overrides={"INFERENCE_BASE_URL": url, "INFERENCE_API_KEY": "from-config"},
+        )
+        LLM(cfg).chat([{"role": "user", "content": "hi"}])
+    assert captured["authorization"] == "Bearer from-config"
+
+
+# --- Runner neutrality (2026-09-11) ---------------------------------------------
+# Every request must land on the OpenAI-compatible surface. If one of these starts
+# hitting an Ollama-native path, the runner has stopped being replaceable.
+
+
+def _path_capturing_server():
+    paths: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def _ok(self, obj):
+            body = json.dumps(obj).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            paths.append(self.path)
+            self._ok({"data": [{"id": "m"}]})
+
+        def do_POST(self):
+            paths.append(self.path)
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            if self.path.endswith("/embeddings"):
+                self._ok({"data": [{"index": 0, "embedding": [0.0]}]})
+            else:
+                self._ok({"choices": [{"message": {"content": "ok"}}]})
+
+        def log_message(self, *a):
+            pass
+
+    return HTTPServer(("127.0.0.1", 0), Handler), paths
+
+
+def test_all_requests_use_openai_compatible_paths(tmp_path):
+    srv, paths = _path_capturing_server()
+    with _running(srv) as url:
+        llm = LLM(_cfg(tmp_path, url))
+        llm.ping()
+        llm.chat([{"role": "user", "content": "hi"}])
+        llm.embed(["a"])
+    assert paths == ["/v1/models", "/v1/chat/completions", "/v1/embeddings"]
+
+
+def test_explicit_base_url_path_is_honoured(tmp_path):
+    """A gateway may mount the API under a prefix; the client must not re-append /v1."""
+    srv, paths = _path_capturing_server()
+    with _running(srv) as url:
+        LLM(_cfg(tmp_path, f"{url}/gateway/v1")).ping()
+    assert paths == ["/gateway/v1/models"]
 
 
 # --- TEST-3: the shared mock_endpoint fixture should reject a malformed body ----------

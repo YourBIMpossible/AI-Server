@@ -29,7 +29,7 @@ def _seed_workspace(ws):
 def _env(monkeypatch, ws, out, host):
     monkeypatch.setenv("WORKSPACE", str(ws))
     monkeypatch.setenv("OUT", str(out))
-    monkeypatch.setenv("OLLAMA_HOST", host)
+    monkeypatch.setenv("INFERENCE_BASE_URL", host)
     monkeypatch.setenv("DIGEST_DAYS", "7")
 
 

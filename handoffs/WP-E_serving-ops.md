@@ -5,24 +5,31 @@
 
 ## Deliverables
 
-- **Container:** extend `docker-compose.yml` with a healthcheck (`GET /api/tags`), a
-  `model-preload` init step that pulls `config/models.txt` on first boot, and a restart policy.
-  A `scripts/up.sh` convenience wrapper.
+> **Runner-neutrality (2026-09-11).** Every check below asserts the *portable* surface
+> (`GET /v1/models`), not a runner-native path, so the same ops layer still holds if the
+> WP-H bakeoff replaces Ollama. Runner-native calls are allowed only as enrichment that
+> degrades cleanly — see `scripts/aiserver_status.py` for the pattern.
+
+- **Container:** `docker-compose.yml` healthcheck on `GET /v1/models` (done 2026-09-11, along
+  with the serving-layer env). Still to add: a `model-preload` init step that pulls
+  `config/models.txt` on first boot, and a `scripts/up.sh` convenience wrapper.
 - **Networking:** `scripts/setup-tailscale.sh` (install + `tailscale up`); document using the
-  box's tailnet name as `OLLAMA_HOST`. Bind Ollama to the tailnet/LAN interface — not 0.0.0.0 on
-  an untrusted network.
+  box's tailnet name in `INFERENCE_BASE_URL`. Bind the runner to the tailnet/LAN interface —
+  not 0.0.0.0 on an untrusted network.
 - **Optional auth gateway:** a Caddy reverse proxy (`ops/Caddyfile`) fronting `:11434` that
-  requires an API-key header; teach `aiserver.client.LLM` an optional `OLLAMA_API_KEY`.
+  requires an API-key header. `aiserver.client.LLM` already reads `INFERENCE_API_KEY` and sends
+  it as `Authorization: Bearer` — no client work left.
 - **Autostart:** confirm the systemd unit (Linux) / Scheduled Task (Windows) brings the endpoint
-  up at boot and survives crashes.
+  up at boot and survives crashes — and that the serving-layer env survives with it, verified
+  from the server's own startup banner (`journalctl -u ollama`), never from the shell.
 - **Endpoint-down alert:** a tiny check (reuse PC-Monitor's alert pattern) that fires if
-  `/api/tags` is unreachable for N minutes.
+  `/v1/models` is unreachable for N minutes.
 
 ## Acceptance
 
 - `docker compose up -d` yields a healthy container with models preloaded.
-- From the rig, `OLLAMA_API_KEY` + tailnet `OLLAMA_HOST` reach the box; a wrong/missing key is
-  rejected by Caddy.
+- From the rig, `INFERENCE_API_KEY` + a tailnet `INFERENCE_BASE_URL` reach the box; a
+  wrong/missing key is rejected by Caddy.
 - Killing the runtime triggers the down-alert; autostart brings it back.
 
 ## Constraints
