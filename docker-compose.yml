@@ -27,10 +27,25 @@ services:
       - OLLAMA_NUM_PARALLEL=1
       - OLLAMA_MAX_LOADED_MODELS=2
     # Health is defined as "the portable contract answers", not "the Ollama process is
-    # alive" -- the same check a replacement runner has to pass. (Needs curl in the image;
-    # a runner image without it needs its own equivalent of this request.)
+    # alive" -- the same check a replacement runner has to pass.
+    #
+    # Verified 2026-09-11 against ollama/ollama:latest (sha256:684d8674b431): the image ships
+    # NO curl and NO wget, so a curl healthcheck reports a perfectly healthy container as
+    # unhealthy, forever. It does ship bash, head and grep -- hence /dev/tcp. A replacement
+    # runner image needs its own equivalent of this same GET; check what it actually
+    # contains before assuming curl is there.
+    #
+    # Folded scalar, not a quoted string: YAML double-quoting would expand the CRLF escapes
+    # into real newlines before printf ever saw them.
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/v1/models >/dev/null || exit 1"]
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/11434 &&
+          printf 'GET /v1/models HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          head -n1 <&3 | grep -q '200 OK'
       interval: 30s
       timeout: 5s
       retries: 3
