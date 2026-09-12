@@ -108,20 +108,20 @@ if ($disk.Size -lt $iso.Length) {
     Fail "Disk $DiskNumber holds $([math]::Round($disk.Size/1GB,2)) GB but the ISO is $([math]::Round($iso.Length/1GB,2)) GB."
 }
 
-Write-Step "Target device -- EVERYTHING ON IT WILL BE DESTROYED"
+if ($VerifyOnly) {
+    Write-Step "Target device -- VerifyOnly, nothing will be written"
+} else {
+    Write-Step "Target device -- EVERYTHING ON IT WILL BE DESTROYED"
+}
 Write-Host "    Disk $DiskNumber  $($disk.FriendlyName)"
 Write-Host "    $([math]::Round($disk.Size/1GB,2)) GB  $($disk.BusType)  $($disk.PartitionStyle)"
 $parts = @(Get-Partition -DiskNumber $DiskNumber -ErrorAction SilentlyContinue)
 if ($parts.Count) {
-    Write-Host "    Existing partitions to be erased:"
+    Write-Host $(if ($VerifyOnly) { "    Current partitions:" } else { "    Existing partitions to be erased:" })
     foreach ($p in $parts) {
         $letter = if ($p.DriveLetter) { "$($p.DriveLetter):" } else { '(no letter)' }
         Write-Host ("      #{0}  {1,-12} {2,8:N2} GB  {3}" -f $p.PartitionNumber, $letter, ($p.Size / 1GB), $p.Type)
     }
-}
-
-if ($VerifyOnly) {
-    Write-Step "VerifyOnly -- nothing will be written"
 }
 
 if (-not $Force -and -not $VerifyOnly) {
