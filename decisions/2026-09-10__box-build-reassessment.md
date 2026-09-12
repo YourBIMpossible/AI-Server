@@ -3,7 +3,7 @@
 **Date:** 2026-09-10
 **Trigger:** the 3090 box powered on for the first time; OS install imminent.
 **Reassesses:** `PROGRAM_PLAN.md` and `AI-Brain-Data/_status/AI-Server_Build_and_Integration_Plan.md`, both stamped 2026-06-16.
-**Status:** analysis + recommendation. The mission question it raises is drafted at `NORTHSTAR.draft.md` for the owner to lock.
+**Status:** analysis + recommendation. The mission question it raises was locked by the owner on 2026-09-11 at `NORTHSTAR.md`.
 
 ---
 
@@ -176,8 +176,8 @@ the rig while classification sat at 8/10.
 
 ## Open calls
 
-1. **What the box is for.** Drafted at `NORTHSTAR.draft.md` — rename to drop `.draft` to
-   lock it. The honest framing is "internal inference substrate + the instrument that
+1. **What the box is for.** ~~Open.~~ **Settled 2026-09-11** — locked at `NORTHSTAR.md`.
+   The honest framing is "internal inference substrate + the instrument that
    makes Local Intel decidable," not "product infrastructure."
 2. **Does Local Intel's phase-1a admission move to the box?** It is blocked on a call the
    owner owes, and the box changes the substrate underneath it. Cheapest path is to admit

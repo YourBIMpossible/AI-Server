@@ -8,8 +8,9 @@ status: active
 > 2026-09-11, when the client contract was decoupled from Ollama and the runner became an
 > open question settled by `handoffs/WP-H_runner-bakeoff.md` rather than by inertia.
 >
-> **This file is in locked form and human-only.** Propose changes as `NORTHSTAR.draft.md`;
-> `protect_paths_gate` blocks assistant edits to the locked path by design.
+> **Locked and human-only by default.** `protect_paths_gate` blocks assistant Write/Edit on
+> this path, and the assistant does not route around it. The owner can grant permission for
+> a specific change; absent that, propose changes as `NORTHSTAR.draft.md`.
 
 ## Mission
 
