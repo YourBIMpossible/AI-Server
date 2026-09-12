@@ -37,6 +37,17 @@ inference endpoint moves.
    one full measurement batch.
 5. **Then pick the 24GB model on evidence** — see the notes in `config/models.txt`. Don't
    copy a model name out of a three-month-old doc; that is how the last set went stale.
+6. **Install Tailscale now, even if you're staying LAN-only for a while:**
+   ```bash
+   bash scripts/setup-tailscale.sh
+   ```
+   Installs Tailscale, brings the tailnet up (`--ssh` included, since this box won't have
+   a monitor attached for long), and firewalls `:11434` to the LAN subnet + tailnet
+   interface via `ufw` — the piece that was overdue regardless of which address you end up
+   using, since `setup-linux.sh` binds `0.0.0.0`. Do this while you're already at the
+   keyboard; the alternative is a second trip to a headless box later. It changes nothing
+   about how the endpoint answers until you edit `.env` on the rig (next section) — the
+   LAN address keeps working exactly as it did before.
 
 ## On your main rig (the only change to your automations)
 
@@ -46,13 +57,21 @@ Edit `.env`:
 INFERENCE_BASE_URL=http://<box-hostname-or-tailscale-name>:11434/v1
 ```
 
+Use the LAN IP (or a router DHCP reservation, so it doesn't move) while you're testing
+on-network; switch to the box's tailnet name — printed at the end of
+`setup-tailscale.sh` — whenever you want this to keep working off-network too. Same repo,
+same script, no rebuild either way.
+
 That's it. `daily_digest.py` (and every future automation) now runs on the box's GPU.
 Re-run `register-tasks-windows.ps1` only if you changed the schedule.
 
 ## Networking & security
 
-- Prefer **Tailscale**: install it on both machines and use the box's Tailscale name in
-  `INFERENCE_BASE_URL`. Avoids exposing the endpoint to your whole LAN, and works off-network.
+- **Tailscale is installed in step 6 above regardless.** Whether `INFERENCE_BASE_URL`
+  actually points at the tailnet name or the LAN IP is a separate decision, made whenever
+  you want it, by editing one line in `.env` — see above. Tailscale avoids exposing the
+  endpoint to your whole LAN and works off-network; on Windows, install it from
+  https://tailscale.com/download and sign in with the same account.
 - **Never port-forward 11434 to the public internet.**
 - If you want auth, put Caddy in front of the endpoint and require an API key; set that key as
   `INFERENCE_API_KEY` on the rig.

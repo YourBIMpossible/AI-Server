@@ -13,9 +13,13 @@
 - **Container:** `docker-compose.yml` healthcheck on `GET /v1/models` (done 2026-09-11, along
   with the serving-layer env). Still to add: a `model-preload` init step that pulls
   `config/models.txt` on first boot, and a `scripts/up.sh` convenience wrapper.
-- **Networking:** `scripts/setup-tailscale.sh` (install + `tailscale up`); document using the
-  box's tailnet name in `INFERENCE_BASE_URL`. Bind the runner to the tailnet/LAN interface —
-  not 0.0.0.0 on an untrusted network.
+- **Networking (done 2026-09-12):** `scripts/setup-tailscale.sh` installs Tailscale, runs
+  `tailscale up --ssh`, and firewalls `:11434` to the LAN subnet + tailnet interface via
+  `ufw`. `relocate.md` documents using the box's tailnet name in `INFERENCE_BASE_URL`.
+  Still open: the runner itself binds `0.0.0.0` (see `setup-linux.sh`), not the
+  tailnet/LAN interface directly — `ufw` is the enforcement point for now. Binding Ollama
+  itself to a specific interface is runner-specific config, revisit under WP-H if it
+  matters to the winning runner.
 - **Optional auth gateway:** a Caddy reverse proxy (`ops/Caddyfile`) fronting `:11434` that
   requires an API-key header. `aiserver.client.LLM` already reads `INFERENCE_API_KEY` and sends
   it as `Authorization: Bearer` — no client work left.
