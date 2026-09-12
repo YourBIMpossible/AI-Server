@@ -1,12 +1,15 @@
 ---
-status: draft
+status: active
 ---
 
-# AI-Server — north star (DRAFT, not locked)
+# Mission: AI-Server — one measurable local inference endpoint
 
-> Drafted 2026-09-10 alongside `decisions/2026-09-10__box-build-reassessment.md`.
-> I can't save the real file. Rename this to `NORTHSTAR.md` to lock and activate it —
-> edit it first if the framing is wrong, because the framing is the part I'm least sure of.
+> Drafted 2026-09-10 alongside `decisions/2026-09-10__box-build-reassessment.md`. Revised
+> 2026-09-11, when the client contract was decoupled from Ollama and the runner became an
+> open question settled by `handoffs/WP-H_runner-bakeoff.md` rather than by inertia.
+>
+> **This file is in locked form and human-only.** Propose changes as `NORTHSTAR.draft.md`;
+> `protect_paths_gate` blocks assistant edits to the locked path by design.
 
 ## Mission
 
