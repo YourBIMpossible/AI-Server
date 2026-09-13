@@ -13,6 +13,7 @@ from .scoring import strip_reasoning
 
 JUDGE_PROMPT = """You are a strict grader. Decide whether the ANSWER meets the CRITERION.
 Judge only the criterion. Do not reward effort, do not fix the answer, do not add requirements.
+Judge meaning, not wording: a paraphrase that states the required fact meets the criterion.
 
 CRITERION:
 {criterion}
