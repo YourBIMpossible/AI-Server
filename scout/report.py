@@ -17,7 +17,8 @@ def _meta_block(meta: dict[str, Any]) -> str:
         v = meta[k]
         if isinstance(v, (dict, list)):
             v = json.dumps(v, sort_keys=True)
-        lines.append(f"| {k} | {str(v).replace('|', '\\|').replace(chr(10), ' ')} |")
+        cell = str(v).replace("|", "\\|").replace(chr(10), " ")
+        lines.append(f"| {k} | {cell} |")
     return "\n".join(lines)
 
 

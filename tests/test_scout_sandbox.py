@@ -88,7 +88,7 @@ def test_inventory_without_git_uses_walk(tmp_path):
 
 
 def test_read_text_ranges_limits_and_denials(repo):
-    sb = Sandbox(repo, limits=Limits(max_read_bytes=20))
+    sb = Sandbox(repo, limits=Limits(max_read_bytes=10))  # below README length on both LF and CRLF
     text, total, truncated = sb.read_text("README.md")
     assert truncated and total >= 1
     sb = Sandbox(repo)
