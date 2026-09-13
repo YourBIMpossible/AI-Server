@@ -6,31 +6,33 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from aiserver import LLM
 from aiserver.prompts import HARNESS_SYSTEM, render
 
 from .policy import RunPolicy
-from .registry import REGISTRY, ValidationError, validate_args
+from .registry import REGISTRY, Skill, ValidationError, validate_args
 from .transcript import Transcript
 
 MAX_TURNS = 8
 
+SkillFactory = Callable[[type[Skill], LLM], Skill]
 
-def _skill_catalog() -> list[dict[str, Any]]:
+
+def _skill_catalog(skills: dict[str, type[Skill]]) -> list[dict[str, Any]]:
     return [
         {
             "type": "function",
             "function": {"name": s.name, "description": s.description, "parameters": s.schema},
         }
-        for s in REGISTRY.values()
+        for s in skills.values()
     ]
 
 
-def _system_prompt() -> str:
-    names = ", ".join(sorted(REGISTRY)) or "(none registered)"
-    return render(HARNESS_SYSTEM, skills=names, max_turns=str(MAX_TURNS))
+def _system_prompt(skills: dict[str, type[Skill]], max_turns: int) -> str:
+    names = ", ".join(sorted(skills)) or "(none registered)"
+    return render(HARNESS_SYSTEM, skills=names, max_turns=str(max_turns))
 
 
 def run(
@@ -40,17 +42,29 @@ def run(
     *,
     out_dir: Path,
     run_id: str | None = None,
+    skills: dict[str, type[Skill]] | None = None,
+    system_prompt: str | None = None,
+    max_turns: int | None = None,
+    make_skill: SkillFactory | None = None,
+    transcript: Transcript | None = None,
 ) -> str:
+    """Defaults reproduce v1 behaviour (global REGISTRY, HARNESS_SYSTEM, MAX_TURNS, Skill(llm)).
+    A caller with its own tool set -- the repo scout -- passes an explicit `skills` map, its own
+    system prompt, a per-run turn budget, a factory that binds skills to run-scoped state, and
+    optionally a Transcript it already owns."""
     run_id = run_id or uuid.uuid4().hex[:12]
-    transcript = Transcript(Path(out_dir) / run_id / "transcript.jsonl")
+    skills = REGISTRY if skills is None else skills
+    max_turns = MAX_TURNS if max_turns is None else max_turns
+    make_skill = make_skill or (lambda cls, llm_: cls(llm_))
+    transcript = transcript or Transcript(Path(out_dir) / run_id / "transcript.jsonl")
     transcript.run_started(run_id, task)
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _system_prompt()},
+        {"role": "system", "content": system_prompt or _system_prompt(skills, max_turns)},
         {"role": "user", "content": task},
     ]
-    tools = _skill_catalog()
+    tools = _skill_catalog(skills)
     try:
-        for turn in range(1, MAX_TURNS + 1):
+        for turn in range(1, max_turns + 1):
             reply = llm.chat_message(messages, tools=tools)
             transcript.model_reply(turn, reply.content, [tc.name for tc in reply.tool_calls])
             if not reply.tool_calls:
@@ -70,15 +84,18 @@ def run(
                 ],
             })
             for tc in reply.tool_calls:
-                messages.append(_dispatch(tc, llm, policy, transcript, turn))
-        transcript.run_aborted_max_turns(MAX_TURNS)
-        return f"Did not converge within {MAX_TURNS} turns."
+                messages.append(_dispatch(tc, llm, policy, transcript, turn, skills, make_skill))
+        transcript.run_aborted_max_turns(max_turns)
+        return f"Did not converge within {max_turns} turns."
     finally:
         transcript.close()
 
 
-def _dispatch(tc, llm: LLM, policy: RunPolicy, transcript: Transcript, turn: int) -> dict[str, Any]:
-    skill_cls = REGISTRY.get(tc.name)
+def _dispatch(
+    tc, llm: LLM, policy: RunPolicy, transcript: Transcript, turn: int,
+    skills: dict[str, type[Skill]] = REGISTRY, make_skill: SkillFactory = lambda cls, llm_: cls(llm_),
+) -> dict[str, Any]:
+    skill_cls = skills.get(tc.name)
     if skill_cls is None:
         error = f"unknown skill {tc.name!r}"
         transcript.validation_failed(turn, tc.name, error)
@@ -86,7 +103,7 @@ def _dispatch(tc, llm: LLM, policy: RunPolicy, transcript: Transcript, turn: int
     if tc.parse_error:
         transcript.validation_failed(turn, tc.name, tc.parse_error)
         return {"role": "tool", "tool_call_id": tc.id, "content": f"Error: {tc.parse_error}"}
-    skill = skill_cls(llm)
+    skill = make_skill(skill_cls, llm)
     try:
         validate_args(skill.schema, tc.arguments)
     except ValidationError as e:
