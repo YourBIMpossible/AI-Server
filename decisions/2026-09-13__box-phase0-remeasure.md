@@ -46,10 +46,10 @@ logged `flash_attn = enabled`, KV f16/f16, `n_ctx 32768`.
 
 | Profile | Model store | Device | Valid for |
 |---|---|---|---|
-| `mybuddy-3090-01` (hash `23e37231…`) | `/usr/share/ollama/.ollama/models` on the root LV | Sabrent NVMe `nvme1n1` | (a), (c), candidate residency, WP-F — GPU-bound |
-| `mybuddy-3090-02` (hash `de36125d…`) | `/srv/models` (dedicated, ext4 noatime) | ADATA SX8200PNP `nvme0n1` | (b) and every drive-bound number |
+| `mybuddy-3090-01` (hash `23e37231…`) | `/usr/share/ollama/.ollama/models` on the root LV | Sabrent 512GB NVMe (root LV) | (a), (c), candidate residency, WP-F — GPU-bound |
+| `mybuddy-3090-02` (hash `de36125d…`) | `/srv/models` (dedicated, ext4 noatime) | ADATA SX8200PNP 1TB, fstab UUID `cde2139a…` | (b) and every drive-bound number |
 
-Mid-session the owner mounted two dedicated 1TB drives. The model store moved to `/srv/models`
+Kernel `nvmeN` names swap between boots (the ADATA was `nvme0n1` in this session, then `nvme1n1` after the reboot), so drives are named by model and UUID here. Mid-session the owner mounted two dedicated 1TB drives. The model store moved to `/srv/models`
 (systemd drop-in `models-store.conf`: `OLLAMA_MODELS=/srv/models` + `RequiresMountsFor=/srv/models`),
 verified from the startup banner (`OLLAMA_MODELS:/srv/models`). Because the drive is part of batch
 identity, cold-load numbers taken on `-01` are **not** used for (b).
