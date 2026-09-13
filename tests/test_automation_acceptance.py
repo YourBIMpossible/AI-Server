@@ -54,7 +54,7 @@ def test_the_real_job_reads_the_generated_workspace(tmp_path):
 def test_grade_judge_is_a_gate():
     m = _load()
     rubric = json.loads((REPO / "eval" / "automation_rubrics" / "daily-digest-box.json").read_text(encoding="utf-8"))["rubric"]
-    good = "- Built the API key gateway\n- 14B still misses its 20 s gate\n- cold-load penalty gone"
+    good = "- Built the API key gateway\n- WP-F eval now separates models\n- WP-H bakeoff protocol frozen\n- Phase 0 re-measured"
     assert m.grade(good, rubric, judge_llm=_Judge("PASS"), judge_model="j", threshold=0.8)["passed"]
     assert not m.grade(good, rubric, judge_llm=_Judge("FAIL"), judge_model="j", threshold=0.8)["passed"]
     assert not m.grade("nothing relevant", rubric, judge_llm=_Judge("PASS"), judge_model="j", threshold=0.8)["passed"]

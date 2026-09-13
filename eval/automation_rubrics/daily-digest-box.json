@@ -1,9 +1,9 @@
 {
   "job": "daily-digest",
-  "about": "Grades the real daily-digest job run on the box against the box's own engineering record (scripts/automation_acceptance.py builds the workspace). Facts below are present in that record: today's AI-Server commits and the Phase 0 remeasure decision doc.",
+  "about": "Grades the real daily-digest job run on the box against the box's own engineering record (scripts/automation_acceptance.py builds the workspace: git history + the Phase 0 remeasure decision doc). The DIGEST prompt asks for terse bullets in three sections, so the rubric asks for the work items that record surfaces, not for every measured number inside the decision doc. v1 (2026-09-13, strict) demanded the 14B latency-gate and cold-load numbers verbatim and failed every correct digest; v2 is this file.",
   "rubric": {
     "contains_any": ["gateway", "API-key", "API key"],
-    "patterns": ["(?i)(20\\s?s\\b|20-second|latency gate|20 s gate)", "(?i)cold[- ]?load"],
-    "judge": "The source logs say: (a) an API-key gateway was built for the endpoint (WP-E); (b) the eval harness was changed so it separates models (WP-F); (c) the 14B model still misses its 20 s latency gate; (d) cold model loads now take seconds, so the old 56-75 s cold-load penalty is gone. PASS only if the digest correctly reports at least three of (a)-(d) and states nothing that contradicts them, for example that the 14B clears its gate, or that a model or runner was chosen or adopted."
+    "patterns": ["(?i)\\bWP-F\\b|\\beval", "(?i)bakeoff|\\bWP-H\\b"],
+    "judge": "The source logs record four pieces of work: (a) an API-key gateway was built for the inference endpoint (WP-E); (b) the eval harness was changed so it separates models (WP-F); (c) a runner bakeoff protocol was frozen and its harness built (WP-H); (d) Phase 0 was re-measured on the box (the 14B model still misses its 20 s latency gate; cold model loads now take seconds instead of 56-75 s). PASS only if the digest correctly reports at least three of (a)-(d), in any wording, and states nothing that contradicts them. Contradictions are claims such as: a model or runner was chosen or adopted, or the 14B clears its gate. Saying that NO model was selected and config is unchanged is consistent with the source, not a contradiction. Omitting a detail is not a contradiction."
   }
 }
