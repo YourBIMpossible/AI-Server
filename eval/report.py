@@ -31,7 +31,14 @@ def _tier_line(results) -> str:
 
 
 def write_report(
-    results, *, threshold: float, model: str, out_dir: Path, today: str, judge_model: str | None = None
+    results,
+    *,
+    threshold: float,
+    model: str,
+    out_dir: Path,
+    today: str,
+    judge_model: str | None = None,
+    calibration: dict | None = None,
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = routing_table(results, threshold)
@@ -40,6 +47,10 @@ def write_report(
     judge_note = f"`{judge_model}`" if judge_model else "none"
     if judge_model and judge_model == model:
         judge_note += " (self-judged)"
+    if calibration:
+        judge_note += f", calibration {calibration['agree']}/{calibration['total']}"
+        if calibration["disagreements"]:
+            judge_note += f" — UNRELIABLE on {', '.join(calibration['disagreements'])}; review judged verdicts"
 
     lines = [
         f"# Eval report — {today}",

@@ -166,6 +166,86 @@ class LLM:
     ) -> str:
         return (self.chat_message(messages, model=model, temperature=temperature, **opts).content or "").strip()
 
+    def chat_timed(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None = None,
+        temperature: float = 0.2,
+        **opts: Any,
+    ) -> dict[str, Any]:
+        """Streamed chat with client-side timings, for benchmarks (WP-H).
+
+        Returns content and reasoning text, `ttft_s` (first token of any kind), `ttfc_s`
+        (first content token), `total_s`, `usage` (when the server honours
+        stream_options.include_usage), `chunks`, `finish_reason`, and `server_timings` -- a
+        non-standard timing object some servers attach, recorded as-is or None. No retries:
+        a benchmark has to see failures, not paper over them.
+        """
+        payload = {
+            "model": model or self.cfg.model,
+            "messages": messages,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "temperature": temperature,
+            **opts,
+        }
+        url = f"{self.cfg.base_url}/chat/completions"
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=self._headers())
+        content: list[str] = []
+        reasoning: list[str] = []
+        ttft = ttfc = None
+        usage = server_timings = finish = None
+        chunks = 0
+        t0 = time.perf_counter()
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                for raw in r:
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        obj = json.loads(data)
+                    except ValueError as e:
+                        raise LLMError(f"{url} sent a non-JSON stream chunk: {data[:200]}") from e
+                    if obj.get("error"):
+                        raise LLMError(f"{url} stream error: {obj['error']}")
+                    chunks += 1
+                    now = time.perf_counter() - t0
+                    for choice in obj.get("choices") or []:
+                        delta = choice.get("delta") or {}
+                        r_part = delta.get("reasoning") or delta.get("reasoning_content")
+                        c_part = delta.get("content")
+                        if (r_part or c_part) and ttft is None:
+                            ttft = now
+                        if c_part:
+                            ttfc = now if ttfc is None else ttfc
+                            content.append(c_part)
+                        if r_part:
+                            reasoning.append(r_part)
+                        finish = choice.get("finish_reason") or finish
+                    usage = obj.get("usage") or usage
+                    server_timings = obj.get("timings") or server_timings
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            raise LLMError(f"{url} returned HTTP {e.code}: {body}") from e
+        except (urllib.error.URLError, OSError) as e:
+            raise LLMError(f"Could not reach {url}: {e}") from e
+        return {
+            "content": "".join(content),
+            "reasoning": "".join(reasoning),
+            "ttft_s": ttft,
+            "ttfc_s": ttfc,
+            "total_s": time.perf_counter() - t0,
+            "usage": usage,
+            "chunks": chunks,
+            "finish_reason": finish,
+            "server_timings": server_timings,
+        }
+
     def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         payload = {"model": model or self.cfg.embed_model, "input": texts}
         data = self._post("/embeddings", payload)

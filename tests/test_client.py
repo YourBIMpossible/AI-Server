@@ -289,3 +289,78 @@ def test_mock_endpoint_rejects_embeddings_body_missing_input(mock_endpoint):
         assert False, "expected an HTTPError"
     except urllib.error.HTTPError as e:
         assert e.code == 400
+
+
+# --- chat_timed: streamed chat with client-side timings (WP-H) -----------
+import json as _json  # noqa: E402
+from http.server import BaseHTTPRequestHandler as _BH, HTTPServer as _HS  # noqa: E402
+import threading as _th  # noqa: E402
+
+import pytest as _pytest  # noqa: E402
+
+
+def _sse_server(chunks, status=200):
+    class H(_BH):
+        seen = []
+
+        def do_POST(self):
+            H.seen.append(_json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+            if status != 200:
+                self.send_response(status)
+                self.end_headers()
+                self.wfile.write(b'{"error":"boom"}')
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            for c in chunks:
+                self.wfile.write(f"data: {c}\n\n".encode())
+                self.wfile.flush()
+            self.wfile.write(b"data: [DONE]\n\n")
+
+        def log_message(self, *a):
+            pass
+
+    srv = _HS(("127.0.0.1", 0), H)
+    _th.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, H
+
+
+def _timed_llm(srv):
+    from aiserver import LLM, load_config
+    from pathlib import Path as _P
+
+    cfg = load_config(dotenv=_P("no-such.env"), overrides={"INFERENCE_BASE_URL": f"http://127.0.0.1:{srv.server_address[1]}/v1"})
+    return LLM(cfg, retries=0)
+
+
+def test_chat_timed_collects_content_reasoning_usage_and_timings():
+    chunks = [
+        _json.dumps({"choices": [{"delta": {"role": "assistant", "reasoning": "hmm"}}]}),
+        _json.dumps({"choices": [{"delta": {"content": "Hel"}}]}),
+        _json.dumps({"choices": [{"delta": {"content": "lo"}, "finish_reason": "stop"}]}),
+        _json.dumps({"choices": [], "usage": {"prompt_tokens": 12, "completion_tokens": 3}, "timings": {"prompt_ms": 5}}),
+    ]
+    srv, H = _sse_server(chunks)
+    try:
+        r = _timed_llm(srv).chat_timed([{"role": "user", "content": "hi"}], model="m", temperature=0)
+    finally:
+        srv.shutdown()
+    assert r["content"] == "Hello" and r["reasoning"] == "hmm"
+    assert r["usage"] == {"prompt_tokens": 12, "completion_tokens": 3}
+    assert r["server_timings"] == {"prompt_ms": 5}
+    assert r["finish_reason"] == "stop" and r["chunks"] == 4
+    assert 0 <= r["ttft_s"] <= r["ttfc_s"] <= r["total_s"]
+    sent = H.seen[0]
+    assert sent["stream"] is True and sent["stream_options"] == {"include_usage": True} and sent["temperature"] == 0
+
+
+def test_chat_timed_http_error_raises_llmerror():
+    from aiserver import LLMError
+
+    srv, _ = _sse_server([], status=500)
+    try:
+        with _pytest.raises(LLMError, match="HTTP 500"):
+            _timed_llm(srv).chat_timed([{"role": "user", "content": "hi"}])
+    finally:
+        srv.shutdown()

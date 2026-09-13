@@ -7,6 +7,10 @@ CLI:  python -m eval.run        # scores eval/cases.jsonl against the local endp
 Two phases: every case is answered first, then rubrics with a "judge" criterion are graded.
 Answer and judge models can differ, and on a 24GB card two ~20GB models can't both stay
 resident -- interleaving them would reload a model on every case.
+
+Whenever a judge is used, it is first run on eval/judge_calibration.jsonl (answers with known
+verdicts) and the agreement is stamped on the report: a judge that can't grade the calibration
+set can't be trusted on the cases either.
 """
 from __future__ import annotations
 
@@ -28,6 +32,7 @@ from .longinputs import build
 from .scoring import passed, score
 
 CASES_FILE = Path(__file__).resolve().parent / "cases.jsonl"
+CALIBRATION_FILE = Path(__file__).resolve().parent / "judge_calibration.jsonl"
 DOCUMENT_PLACEHOLDER = "{{DOCUMENT}}"
 
 
@@ -49,7 +54,7 @@ class Result:
 
 
 def load_cases(path: Path = CASES_FILE) -> list[dict]:
-    """Parse cases.jsonl, one JSON object per non-blank line.
+    """Parse a JSONL file, one JSON object per non-blank line.
 
     Raises ValueError naming the file and 1-based line number on a malformed line,
     instead of letting json.JSONDecodeError's own message (which doesn't know the
@@ -73,6 +78,20 @@ def case_prompt(case: dict) -> str:
     if "document" in case:
         text = text.replace(DOCUMENT_PLACEHOLDER, build(case["document"]))
     return text
+
+
+def calibrate_judge(judge_llm, judge_model: str | None, path: Path = CALIBRATION_FILE) -> dict:
+    """Run the judge on answers with known verdicts -> {agree, total, disagreements: [ids]}."""
+    items = load_cases(path)
+    wrong = []
+    for item in items:
+        try:
+            verdict, _ = judge(judge_llm, item["criterion"], item["answer"], model=judge_model)
+        except LLMError:
+            verdict = None
+        if verdict is not item["expected"]:
+            wrong.append(item["id"])
+    return {"agree": len(items) - len(wrong), "total": len(items), "disagreements": wrong}
 
 
 def run_cases(
@@ -155,22 +174,32 @@ def run_cases(
     return results
 
 
+def write_outputs(path: Path, results: list[Result], *, model: str, judge_model: str | None) -> None:
+    with path.open("w", encoding="utf-8") as f:
+        for r in results:
+            f.write(json.dumps({"model": model, "judge_model": judge_model, **asdict(r)}) + "\n")
+
+
 def main() -> int:
     cfg = load_config()
     log = get_logger("eval")
     threshold = cfg.eval_pass_threshold
     baseline_key = os.environ.get("ANTHROPIC_API_KEY")
     judge_model = cfg.eval_judge_model or cfg.model
+    llm = LLM(cfg, timeout=900)
 
     try:
         cases = load_cases()
         results = run_cases(
             cases,
-            LLM(cfg, timeout=900),
+            llm,
             threshold=threshold,
             baseline_key=baseline_key,
             baseline_model=cfg.baseline_model,
             judge_model=judge_model,
+        )
+        calibration = (
+            calibrate_judge(llm, judge_model) if any(c.get("rubric", {}).get("judge") for c in cases) else None
         )
     except Exception as e:  # malformed cases file, etc. -- surface, don't write a misleading report
         print(f"[FAIL] eval run failed: {e}", file=sys.stderr)
@@ -184,11 +213,10 @@ def main() -> int:
     today = datetime.now().strftime("%Y-%m-%d")
     out_dir = cfg.out / "eval"
     report = write_report(
-        results, threshold=threshold, model=cfg.model, out_dir=out_dir, today=today, judge_model=judge_model
+        results, threshold=threshold, model=cfg.model, out_dir=out_dir, today=today,
+        judge_model=judge_model, calibration=calibration,
     )
-    with (out_dir / f"outputs-{today}.jsonl").open("w", encoding="utf-8") as f:
-        for r in results:
-            f.write(json.dumps({"model": cfg.model, "judge_model": judge_model, **asdict(r)}) + "\n")
+    write_outputs(out_dir / f"outputs-{today}.jsonl", results, model=cfg.model, judge_model=judge_model)
     n_pass = sum(1 for r in results if r.passed)
     log("eval", cases=len(results), passed=n_pass, threshold=threshold, baseline=bool(baseline_key))
     print(f"[OK] {n_pass}/{len(results)} cases passed (threshold {threshold}). Wrote {report}")

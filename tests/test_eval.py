@@ -398,3 +398,56 @@ def test_repo_cases_are_well_formed():
 
 def test_business_day_case_premise_holds():
     assert date(2026, 3, 20).weekday() == 4  # the case says Friday
+
+
+# --- judge calibration + rescoring ---------------------------------------
+from eval.rescore import ReplayLLM, rescore  # noqa: E402
+from eval.run import calibrate_judge, write_outputs  # noqa: E402
+
+
+def test_calibration_file_is_valid_and_balanced():
+    items = load_cases(REPO / "eval" / "judge_calibration.jsonl")
+    assert len(items) >= 6 and len({i["id"] for i in items}) == len(items)
+    assert {True, False} <= {i["expected"] for i in items}
+
+
+def test_calibrate_judge_counts_disagreements(tmp_path):
+    p = _cases_file(tmp_path, [
+        json.dumps({"id": "a", "criterion": "C-A", "answer": "x", "expected": True}),
+        json.dumps({"id": "b", "criterion": "C-B", "answer": "y", "expected": False}),
+    ])
+    always_pass = _FakeLLM([("CRITERION", "PASS")])
+    assert calibrate_judge(always_pass, "j", p) == {"agree": 1, "total": 2, "disagreements": ["b"]}
+
+
+def test_rescore_replays_saved_answers_under_current_rubrics(tmp_path, monkeypatch):
+    cases = [
+        {"id": "k", "task": "t", "input": "Q1", "rubric": {"contains": ["yes"]}},
+        {"id": "j", "task": "t", "input": "Q2", "rubric": {"contains": ["400"], "judge": "400 is right"}},
+        {"id": "e", "task": "t", "input": "Q3", "rubric": {}},
+    ]
+    monkeypatch.setattr("eval.rescore.load_cases", lambda path=None: cases if path is None else load_cases(path))
+    first = run_cases(cases, _FakeLLM([("Q1", "yes"), ("Q2", "400 days"), ("Q3", LLMError("timeout"))]),
+                      threshold=0.8, judge_llm=_FakeLLM([("CRITERION", "PASS")]))
+    out = tmp_path / "outputs.jsonl"
+    write_outputs(out, first, model="m", judge_model="j")
+    grader = _FakeLLM([("CRITERION", "FAIL")])
+    results, model = rescore(out, threshold=0.8, judge_llm=grader, judge_model="j")
+    by = {r.id: r for r in results}
+    assert model == "m"
+    assert by["k"].passed and by["j"].judged is False and not by["j"].passed
+    assert by["e"].error == "timeout" and not by["e"].passed
+    assert all("Q1" not in c["prompt"] for c in grader.calls)  # the answer model was never asked again
+
+
+def test_replay_llm_maps_prompts_to_saved_output():
+    cases = [{"id": "a", "input": "P"}]
+    assert ReplayLLM(cases, {"a": {"output": "saved", "error": None}}).chat([{"role": "user", "content": "P"}]) == "saved"
+
+
+def test_write_report_stamps_judge_calibration(mock_endpoint, tmp_path):
+    results = _mixed_results(mock_endpoint, tmp_path)
+    report = write_report(results, threshold=0.8, model="m", out_dir=tmp_path, today="d", judge_model="j",
+                          calibration={"agree": 7, "total": 8, "disagreements": ["cal-x"]})
+    text = report.read_text(encoding="utf-8")
+    assert "calibration 7/8" in text and "UNRELIABLE on cal-x" in text
