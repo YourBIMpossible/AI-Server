@@ -21,6 +21,8 @@ _DEFAULTS = {
     "DIGEST_DAYS": "7",
     "EVAL_PASS_THRESHOLD": "0.8",
     "BASELINE_MODEL": "claude-opus-4-8",
+    # Model that grades rubric "judge" criteria; blank = the model under test (self-judged).
+    "EVAL_JUDGE_MODEL": "",
     "DICTATION_PROXY_HOST": "127.0.0.1",
     "DICTATION_PROXY_PORT": "11435",
 }
@@ -114,6 +116,7 @@ class Config:
     baseline_model: str
     dictation_proxy_host: str
     dictation_proxy_port: int
+    eval_judge_model: str = ""
 
     @property
     def base_url(self) -> str:
@@ -149,4 +152,5 @@ def load_config(
         baseline_model=merged["BASELINE_MODEL"],
         dictation_proxy_host=merged["DICTATION_PROXY_HOST"],
         dictation_proxy_port=_cast("DICTATION_PROXY_PORT", merged["DICTATION_PROXY_PORT"], int),
+        eval_judge_model=merged["EVAL_JUDGE_MODEL"],
     )
