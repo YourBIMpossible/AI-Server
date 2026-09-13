@@ -129,3 +129,10 @@ def test_setup_ops_never_sources_the_environment_file_and_keeps_the_key():
     assert ". /etc/ai-server/gateway.env" not in code and "source /etc/ai-server/gateway.env" not in code
     assert 'if [ -f /etc/ai-server/gateway.env ]; then' in code  # an existing key is never regenerated
     assert "systemctl restart aiserver-gateway.service" in code  # a re-run applies config changes
+
+
+def test_crash_test_report_never_pastes_shell_values_into_python_source():
+    script = (REPO / "scripts" / "crash-recovery-test.sh").read_text(encoding="utf-8")
+    report = script[script.index("python3 - \"$report\""):]
+    assert "<<'EOF'" in report  # quoted heredoc: no shell expansion inside the Python
+    assert '"""$' not in report and "os.environ" in report

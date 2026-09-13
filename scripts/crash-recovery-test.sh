@@ -76,17 +76,26 @@ echo "alert after ${t_alert}s of downtime · recovered at ${t_recovered}s"
 
 mkdir -p "$ROOT/out/ops"
 report="$ROOT/out/ops/crash-recovery-$(date -u +%Y%m%dT%H%M%SZ).json"
-python3 - "$report" <<EOF
-import json, sys
+# Every value reaches Python through the environment, never by pasting it into source: the
+# banner and the alert lines contain quotes, and a shell-expanded heredoc broke on them
+# (SyntaxError after an otherwise passing run, 2026-09-13).
+CR_UNIT="$UNIT" CR_URL="$URL" CR_MODEL="$MODEL" CR_OLD_PID="$old_pid" CR_NEW_PID="$new_pid" \
+CR_RESTARTS_BEFORE="$restarts_before" CR_RESTARTS_AFTER="$restarts_after" \
+CR_T_ACTIVE="$t_active" CR_T_MODELS="$t_models" CR_T_GEN="$t_gen" CR_ENV_OK="$env_ok" CR_BANNER="$banner" \
+CR_T_ALERT="$t_alert" CR_T_RECOVERED="$t_recovered" CR_ALERT_LINE="$alert_line" CR_RECOVERED_LINE="$recovered_line" \
+python3 - "$report" <<'EOF'
+import json, os, sys
+e = os.environ
+num = lambda k: float(e[k]) if e.get(k) else None  # noqa: E731
 json.dump({
-  "unit": "$UNIT", "url": "$URL", "model": "$MODEL",
-  "phase_a_sigkill": {"old_pid": "$old_pid", "new_pid": "$new_pid",
-    "restarts_before": "$restarts_before", "restarts_after": "$restarts_after",
-    "active_s": "$t_active" or None, "models_s": "$t_models" or None, "completion_s": "$t_gen" or None,
-    "banner_env_intact": "$env_ok" == "true", "banner": """$banner"""[:4000]},
-  "phase_b_alert": {"alert_minutes": 1, "alert_after_s": "$t_alert" or None,
-    "recovered_after_s": "$t_recovered" or None,
-    "alert_line": """$alert_line""", "recovered_line": """$recovered_line"""},
+  "unit": e["CR_UNIT"], "url": e["CR_URL"], "model": e["CR_MODEL"],
+  "phase_a_sigkill": {"old_pid": e["CR_OLD_PID"], "new_pid": e["CR_NEW_PID"],
+    "restarts_before": e["CR_RESTARTS_BEFORE"], "restarts_after": e["CR_RESTARTS_AFTER"],
+    "active_s": num("CR_T_ACTIVE"), "models_s": num("CR_T_MODELS"), "completion_s": num("CR_T_GEN"),
+    "banner_env_intact": e["CR_ENV_OK"] == "true", "banner": e["CR_BANNER"][:4000]},
+  "phase_b_alert": {"alert_minutes": 1, "alert_after_s": num("CR_T_ALERT"),
+    "recovered_after_s": num("CR_T_RECOVERED"),
+    "alert_line": e["CR_ALERT_LINE"], "recovered_line": e["CR_RECOVERED_LINE"]},
 }, open(sys.argv[1], "w"), indent=2)
 EOF
 chown "$RUN_USER" "$report" "$ROOT/out/ops"

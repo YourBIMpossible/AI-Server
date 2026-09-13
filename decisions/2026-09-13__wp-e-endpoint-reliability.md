@@ -7,7 +7,7 @@
 - **Gateway is live on the box:** Caddy 2.11.4 listens on 127.0.0.1, the LAN address and the tailnet address at `:11440`. It requires `Authorization: Bearer $INFERENCE_API_KEY`, proxies `/v1/*` only, and refuses to start with a short key. Verified: no key 401, wrong key 401, right key 200 plus completion plus streaming, `/api/tags` 404.
 - **Not yet enforced:** `:11434` is still reachable directly from LAN and tailnet. `setup-ops.sh --enforce` swaps the ufw rules, and it breaks the rig until its `.env` moves to `:11440` plus the key.
 - **Endpoint-down alert** runs every minute (systemd timer) and **boot warm-up** is enabled.
-- **Crash-recovery test and post-install reboot check: NOT RUN.** Both need root (`sudo -n` asks for a password in this session). Scripts are committed and ready.
+- **Crash recovery passes:** SIGKILL → serving again in 7.25 s (completion in ≤13.82 s), banner env intact; the down-alert fired at 60 s and cleared 3.5 s after restart. **Post-install reboot check: pending** (needs the owner to reboot; this session cannot).
 
 ## Landed (commits `52dc6db`, `0b8b6a1`)
 
@@ -31,11 +31,23 @@ New config keys (in `.env.example`): `EVAL_JUDGE_MODEL`, `ENDPOINT_ALERT_MINUTES
   - The endpoint-watch timer fires each minute and exits clean.
 - **Tests:** `tests/test_ops.py` covers the alert state machine (one alert per outage, blips never alert, a 0 timestamp is a real value), preload against the stdlib mock, and config guards (private default bind, `/v1` only, no sourcing, key kept).
 
+## Crash recovery — **passes** (owner ran `sudo bash scripts/crash-recovery-test.sh`, 06:43 UTC)
+
+| Phase | Result |
+|---|---|
+| A — SIGKILL the runner's main PID | unit active again after **3.62 s**, `/v1/models` 200 after **7.25 s**, a completion on `qwen2.5-coder:14b` after **13.82 s**; the new startup banner still carries FA, 32768, keep-alive -1, `/srv/models` |
+| B — stop the runner past a 1-minute window | `ALERT` fired after **60.41 s** of downtime; `RECOVERED` **3.5 s** after the start |
+
+Numbers come from the owner's terminal: the script's final JSON step crashed on a
+`SyntaxError` because it pasted the raw banner into a shell-expanded Python heredoc. Fixed
+(values now cross via the environment; a test guards it). Caveat on Phase A: it overlapped
+with this session's last llama-server run on the GPU, so 13.82 s to completion is an upper
+bound, not a clean figure. The setup-ops re-run the same hour was clean: 401 / 401 / 200 / 404.
+
 ## Not verified — needs the owner
 
-1. `sudo bash scripts/crash-recovery-test.sh`. Run it only when the GPU is not being measured; it stops the runner for about 2 minutes.
-2. Reboot. Then confirm from this boot's journald that the Ollama banner still carries FA, 32768, keep-alive -1 and `/srv/models`, the gateway is up on all three binds, preload warmed `INFERENCE_MODEL`, and the watch timer runs.
-3. Decide on `--enforce`. Then set the rig's `.env` to `INFERENCE_BASE_URL=http://<tailnet name>:11440/v1` plus `INFERENCE_API_KEY` from `sudo cat /etc/ai-server/gateway.env`. Never commit the key.
+1. Reboot. Then confirm from this boot's journald that the Ollama banner still carries FA, 32768, keep-alive -1 and `/srv/models`, the gateway is up on all three binds, preload warmed `INFERENCE_MODEL`, and the watch timer runs.
+2. Decide on `--enforce`. Then set the rig's `.env` to `INFERENCE_BASE_URL=http://<tailnet name>:11440/v1` plus `INFERENCE_API_KEY` from `sudo cat /etc/ai-server/gateway.env`. Never commit the key.
 
 ## Flags
 
