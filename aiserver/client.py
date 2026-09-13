@@ -22,6 +22,13 @@ class LLMError(RuntimeError):
     """Endpoint unreachable, or an unexpected response shape."""
 
 
+class PromptTooLargeError(LLMError):
+    """The estimated prompt exceeds the configured context window. Raised BEFORE
+    sending, because some runners silently truncate an oversized prompt and answer
+    anyway (Ollama 0.34.0 cuts to ~16k and returns HTTP 200) -- a wrong answer with
+    no error is worse than a refusal. See decisions/2026-09-13__wp-h-runner-bakeoff.md."""
+
+
 @dataclass(frozen=True)
 class ToolCall:
     id: str
@@ -45,11 +52,16 @@ class LLM:
         retries: int = 2,
         backoff: float = 1.5,
         api_key: str | None = None,
+        max_input_tokens: int | None = None,
     ):
         self.cfg = config or load_config()
         self.timeout = timeout
         self.retries = retries
         self.backoff = backoff
+        # Prompt-size guard budget (tokens). Falls back to config; 0 disables it.
+        self.max_input_tokens = (
+            max_input_tokens if max_input_tokens is not None else self.cfg.inference_max_input_tokens
+        )
         # Optional, for an api-key gateway in front of the endpoint (WP-E).
         self.api_key = api_key if api_key is not None else (self.cfg.inference_api_key or None)
 
@@ -91,6 +103,36 @@ class LLM:
             f"(INFERENCE_BASE_URL={self.cfg.inference_base_url})?"
         )
 
+    @staticmethod
+    def estimate_prompt_tokens(messages: list[dict[str, Any]]) -> int:
+        """Deliberately conservative (over-)estimate of prompt tokens, with no tokenizer
+        dependency and no runner-native call -- the guard must stay portable. ~3.5 chars per
+        token (below the ~4 English average, so mixed code/JSON is not under-counted) plus a
+        small per-message role/framing overhead. The goal is to refuse before a runner
+        silently truncates, not to reproduce the server's exact count."""
+        import math
+
+        chars = 0
+        for m in messages:
+            c = m.get("content")
+            if isinstance(c, str):
+                chars += len(c)
+            elif isinstance(c, list):  # OpenAI content parts
+                chars += sum(len(part.get("text", "")) for part in c if isinstance(part, dict))
+        return math.ceil(chars / 3.5) + 8 * len(messages)
+
+    def _guard_prompt_size(self, messages: list[dict[str, Any]]) -> None:
+        budget = self.max_input_tokens
+        if not budget or budget <= 0:
+            return
+        est = self.estimate_prompt_tokens(messages)
+        if est > budget:
+            raise PromptTooLargeError(
+                f"estimated prompt ~{est} tokens exceeds the {budget}-token context budget "
+                f"(INFERENCE_MAX_INPUT_TOKENS). Refusing to send: the runner may silently "
+                f"truncate it. Shorten the prompt, or raise the budget if the server context is larger."
+            )
+
     def chat_message(
         self,
         messages: list[dict[str, str]],
@@ -100,6 +142,7 @@ class LLM:
         tools: list[dict[str, Any]] | None = None,
         **opts: Any,
     ) -> ChatMessage:
+        self._guard_prompt_size(messages)
         payload = {
             "model": model or self.cfg.model,
             "messages": messages,

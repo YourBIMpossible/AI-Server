@@ -16,6 +16,11 @@ _DEFAULTS = {
     "INFERENCE_API_KEY": "",
     "INFERENCE_MODEL": "qwen2.5-coder:14b",
     "INFERENCE_EMBED_MODEL": "nomic-embed-text",
+    # Client-side prompt-size guard. The served context window in tokens; a request whose
+    # estimated prompt exceeds it is refused, because some runners (Ollama 0.34.0) silently
+    # truncate an oversized prompt to ~half and answer anyway (HTTP 200). Runner-neutral.
+    # 0 disables the guard.
+    "INFERENCE_MAX_INPUT_TOKENS": "32768",
     "WORKSPACE": r"F:\BIMpossible-Workspace",
     "OUT": "./out",
     "DIGEST_DAYS": "7",
@@ -123,6 +128,7 @@ class Config:
     eval_judge_model: str = ""
     endpoint_alert_minutes: float = 3.0
     endpoint_alert_webhook: str = ""
+    inference_max_input_tokens: int = 32768
 
     @property
     def base_url(self) -> str:
@@ -158,6 +164,7 @@ def load_config(
         baseline_model=merged["BASELINE_MODEL"],
         dictation_proxy_host=merged["DICTATION_PROXY_HOST"],
         dictation_proxy_port=_cast("DICTATION_PROXY_PORT", merged["DICTATION_PROXY_PORT"], int),
+        inference_max_input_tokens=_cast("INFERENCE_MAX_INPUT_TOKENS", merged["INFERENCE_MAX_INPUT_TOKENS"], int),
         eval_judge_model=merged["EVAL_JUDGE_MODEL"],
         endpoint_alert_minutes=_cast("ENDPOINT_ALERT_MINUTES", merged["ENDPOINT_ALERT_MINUTES"], float),
         endpoint_alert_webhook=merged["ENDPOINT_ALERT_WEBHOOK"],

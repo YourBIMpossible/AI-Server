@@ -364,3 +364,41 @@ def test_chat_timed_http_error_raises_llmerror():
             _timed_llm(srv).chat_timed([{"role": "user", "content": "hi"}])
     finally:
         srv.shutdown()
+
+
+# --- Prompt-size guard (WP-H: Ollama silently truncates >32k prompts) --------
+
+
+def test_oversized_prompt_is_refused_before_sending(tmp_path):
+    # Budget small; a big prompt must raise without any HTTP call (endpoint is dead).
+    llm = LLM(_cfg(tmp_path, "http://127.0.0.1:1"), retries=0, timeout=1)
+    llm.max_input_tokens = 100
+    from aiserver.client import PromptTooLargeError
+    with pytest.raises(PromptTooLargeError):
+        llm.chat([{"role": "user", "content": "x" * 10000}])
+
+
+def test_guard_disabled_when_budget_zero(mock_endpoint, tmp_path):
+    llm = LLM(_cfg(tmp_path, mock_endpoint))
+    llm.max_input_tokens = 0
+    # Huge prompt, guard off -> reaches the mock and returns its answer.
+    assert llm.chat([{"role": "user", "content": "x" * 100000}]) == "ok"
+
+
+def test_prompt_within_budget_passes(mock_endpoint, tmp_path):
+    llm = LLM(_cfg(tmp_path, mock_endpoint))
+    llm.max_input_tokens = 32768
+    assert llm.chat([{"role": "user", "content": "hello"}]) == "ok"
+
+
+def test_estimate_is_conservative_upper_bound():
+    # ~4 chars/token is the English average; our estimator must not fall below it.
+    msg = [{"role": "user", "content": "a" * 4000}]
+    assert LLM.estimate_prompt_tokens(msg) >= 4000 / 4
+
+
+def test_budget_comes_from_config(tmp_path):
+    cfg = load_config(dotenv=tmp_path / "none.env",
+                      overrides={"INFERENCE_BASE_URL": "http://127.0.0.1:1",
+                                 "INFERENCE_MAX_INPUT_TOKENS": "500"})
+    assert LLM(cfg).max_input_tokens == 500
