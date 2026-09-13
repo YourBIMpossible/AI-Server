@@ -1,0 +1,15 @@
+# Warm the working model after boot, so the first real request isn't a cold load (WP-E).
+# Installed by scripts/setup-ops.sh, which fills in @REPO@ and @USER@.
+[Unit]
+Description=AI-Server: wait for the endpoint and warm the working model
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+ExecStart=/usr/bin/python3 @REPO@/scripts/preload.py --wait 600
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

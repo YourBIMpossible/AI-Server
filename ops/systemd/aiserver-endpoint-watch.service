@@ -1,0 +1,9 @@
+# One endpoint check (WP-E); aiserver-endpoint-watch.timer runs it every minute.
+# Installed by scripts/setup-ops.sh, which fills in @REPO@ and @USER@.
+[Unit]
+Description=AI-Server: alert when the inference endpoint stops serving
+
+[Service]
+Type=oneshot
+User=@USER@
+ExecStart=/usr/bin/python3 @REPO@/scripts/endpoint_watch.py
