@@ -6,6 +6,11 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="${PYTHON:-python3}"
+# Exclusive GPU work: re-exec under the interlock (ops/PRODUCTION-CONTRACT.md). AISERVER_NOLOCK=1 skips.
+if [ -z "${AISERVER_GPU_LOCKED:-}" ] && [ -z "${AISERVER_NOLOCK:-}" ]; then
+  export AISERVER_GPU_LOCKED=1
+  exec "$PY" "$ROOT/scripts/gpu_lock.py" run --purpose "WP-H bakeoff session" -- "$0" "$@"
+fi
 MODEL="qwen3-coder:30b-a3b-q4_K_M"
 OLLAMA="http://127.0.0.1:11434/v1"
 LLAMA="http://127.0.0.1:18080/v1"
