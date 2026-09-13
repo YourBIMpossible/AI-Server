@@ -8,6 +8,11 @@ nomic-embed-text
 
 # --- On the 3090 box (24GB) ---
 #
+# CHOSEN (2026-09-13, box mybuddy). WP-F scored it 27/27 -- the fastest of the three
+# top models on the long-context cases (25.5s median) and fully GPU-resident at 32k with
+# f16 KV. See decisions/2026-09-13__runner-and-model-pick.md.
+gemma4:26b-a4b-it-q4_K_M
+#
 # Deliberately no pinned recommendation here. The June 2026 picks (qwen2.5-coder:32b,
 # llama3.3:70b) went stale inside twelve weeks, and hard-coding replacements just repeats
 # the mistake. Pick at build time, on evidence:
