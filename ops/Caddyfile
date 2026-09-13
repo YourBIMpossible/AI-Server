@@ -1,0 +1,52 @@
+# AI-Server API-key gateway (WP-E). Clients present INFERENCE_API_KEY as a Bearer token.
+#
+# Every value comes from the environment (/etc/ai-server/gateway.env on the box, written by
+# scripts/setup-ops.sh), so nothing host-specific is committed:
+#   INFERENCE_API_KEY  the shared key (the unit refuses to start with a missing or short one)
+#   GATEWAY_BIND       space-separated addresses: loopback, the LAN address, the tailnet address
+#   GATEWAY_PORT       default 11440
+#   GATEWAY_UPSTREAM   the runner's local address, default 127.0.0.1:11434
+#
+# The committed default binds loopback only. Never put a public address in GATEWAY_BIND, and
+# never port-forward this port -- LAN and tailnet only (NORTHSTAR off-limits).
+#
+# Only the portable OpenAI-compatible surface (/v1/*) is proxied. Runner-native paths
+# (Ollama's /api/pull, /api/delete, ...) are not reachable through the gateway at all.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+http://:{$GATEWAY_PORT:11440} {
+	bind {$GATEWAY_BIND:127.0.0.1}
+
+	@authorized {
+		path /v1/*
+		header Authorization "Bearer {$INFERENCE_API_KEY}"
+	}
+
+	handle @authorized {
+		reverse_proxy {$GATEWAY_UPSTREAM:127.0.0.1:11434} {
+			# Stream tokens as they arrive; 32k-context requests can run for minutes.
+			flush_interval -1
+			transport http {
+				response_header_timeout 15m
+			}
+		}
+	}
+
+	handle /v1/* {
+		header Content-Type application/json
+		respond `{"error":{"message":"missing or invalid API key","type":"invalid_request_error","code":"invalid_api_key"}}` 401
+	}
+
+	handle {
+		respond 404
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

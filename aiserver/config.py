@@ -21,6 +21,12 @@ _DEFAULTS = {
     "DIGEST_DAYS": "7",
     "EVAL_PASS_THRESHOLD": "0.8",
     "BASELINE_MODEL": "claude-opus-4-8",
+    # Model that grades rubric "judge" criteria; blank = the model under test (self-judged).
+    "EVAL_JUDGE_MODEL": "",
+    # Endpoint-down alert (scripts/endpoint_watch.py): minutes not serving before one alert,
+    # and an optional LAN/tailnet webhook that receives it as JSON.
+    "ENDPOINT_ALERT_MINUTES": "3",
+    "ENDPOINT_ALERT_WEBHOOK": "",
     "DICTATION_PROXY_HOST": "127.0.0.1",
     "DICTATION_PROXY_PORT": "11435",
 }
@@ -114,6 +120,9 @@ class Config:
     baseline_model: str
     dictation_proxy_host: str
     dictation_proxy_port: int
+    eval_judge_model: str = ""
+    endpoint_alert_minutes: float = 3.0
+    endpoint_alert_webhook: str = ""
 
     @property
     def base_url(self) -> str:
@@ -149,4 +158,7 @@ def load_config(
         baseline_model=merged["BASELINE_MODEL"],
         dictation_proxy_host=merged["DICTATION_PROXY_HOST"],
         dictation_proxy_port=_cast("DICTATION_PROXY_PORT", merged["DICTATION_PROXY_PORT"], int),
+        eval_judge_model=merged["EVAL_JUDGE_MODEL"],
+        endpoint_alert_minutes=_cast("ENDPOINT_ALERT_MINUTES", merged["ENDPOINT_ALERT_MINUTES"], float),
+        endpoint_alert_webhook=merged["ENDPOINT_ALERT_WEBHOOK"],
     )

@@ -85,7 +85,9 @@ def test_load_cases_skips_blank_lines(tmp_path):
 
 def test_repo_cases_file_is_valid_and_sized():
     cases = load_cases(REPO / "eval" / "cases.jsonl")
-    assert 15 <= len(cases) <= 25
+    # Widened from <=25 on 2026-09-13, deliberately: 10 hard/long cases were added so the
+    # eval separates models (every model scored 17/17 on the original set).
+    assert 15 <= len(cases) <= 40
     assert all({"id", "task", "input", "rubric"} <= set(c) for c in cases)
     assert len({c["id"] for c in cases}) == len(cases)  # unique ids
 
@@ -196,3 +198,256 @@ def test_claude_baseline_skipped_without_key(monkeypatch):
     # this -- documents the requirement locally, not just via a suite-wide default.
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     assert claude_baseline("hello", api_key=None) is None
+
+
+# --- reasoning stripping (WP-F 2026-09-13) --------------------------------
+from datetime import date  # noqa: E402
+import json  # noqa: E402
+import re  # noqa: E402
+
+from aiserver import LLMError  # noqa: E402
+from eval.judge import judge, parse_verdict  # noqa: E402
+from eval.longinputs import build  # noqa: E402
+from eval.run import case_prompt  # noqa: E402
+from eval.scoring import strip_reasoning  # noqa: E402
+
+
+def test_strip_reasoning_removes_closed_blocks_any_case_and_tag():
+    assert strip_reasoning("<think>scratch</think>answer") == "answer"
+    assert strip_reasoning("<THINK>\nline1\nline2\n</Think>\n answer ") == "answer"
+    assert strip_reasoning("<thinking>a</thinking>x<reasoning>b</reasoning>y") == "xy"
+
+
+def test_strip_reasoning_unterminated_block_strips_to_end():
+    assert strip_reasoning("<think>still going when the tokens ran out") == ""
+    assert strip_reasoning("prefix <think>cut off") == "prefix"
+
+
+def test_strip_reasoning_orphan_close_tag_drops_the_preamble():
+    assert strip_reasoning("reasoning the template opened\n</think>\nfinal") == "final"
+
+
+def test_strip_reasoning_leaves_plain_answers_alone():
+    assert strip_reasoning("  plain answer  ") == "plain answer"
+    assert strip_reasoning(None) == ""
+
+
+def test_score_ignores_keywords_that_only_appear_in_scratch_work():
+    out = "<think>maybe the answer is spam?</think>HAM"
+    assert score(out, {"contains_any": ["spam"]}) == 0.0
+    assert score(out, {"contains_any": ["ham"]}) == 1.0
+
+
+def test_score_truncated_reasoning_is_a_miss():
+    assert score("<think>the port is 9443, so", {"regex_full": r"\s*9443\s*"}) == 0.0
+
+
+# --- new rubric gates ----------------------------------------------------
+def test_regex_full_is_an_exact_format_gate():
+    assert score(" 9443\n", {"regex_full": r"\s*9443\s*"}) == 1.0
+    assert score("The port is 9443", {"regex_full": r"\s*9443\s*"}) == 0.0
+
+
+def test_json_equals_requires_exact_value_and_tolerates_one_fence():
+    rubric = {"json_equals": ["a", "b"]}
+    assert score('["a", "b"]', rubric) == 1.0
+    assert score('```json\n["a", "b"]\n```', rubric) == 1.0
+    assert score('["b", "a"]', rubric) == 0.0
+    assert score('Here you go: ["a", "b"]', rubric) == 0.0
+
+
+def test_max_words_gate():
+    assert score("one two three", {"max_words": 3}) == 1.0
+    assert score("one two three four", {"max_words": 3}) == 0.0
+
+
+def test_patterns_count_toward_the_graded_fraction():
+    rubric = {"contains": ["alpha"], "patterns": [r"^X=1$", r"^Y=2$"]}
+    assert score("alpha\nX=1\nY=2", rubric) == 1.0
+    assert abs(score("alpha\nX=1\nY=3", rubric) - 2 / 3) < 1e-9
+
+
+# --- judge ---------------------------------------------------------------
+class _FakeLLM:
+    """Answers by substring of the prompt; records calls. Exceptions are raised."""
+
+    def __init__(self, replies):
+        self.replies = replies
+        self.calls = []
+
+    def chat(self, messages, *, model=None, temperature=0.2, **opts):
+        prompt = messages[-1]["content"]
+        self.calls.append({"model": model, "temperature": temperature, "prompt": prompt, **opts})
+        for key, reply in self.replies:
+            if key in prompt:
+                if isinstance(reply, Exception):
+                    raise reply
+                return reply
+        return "ok"
+
+
+def test_parse_verdict():
+    assert parse_verdict("PASS") is True
+    assert parse_verdict("fail\nbecause") is False
+    assert parse_verdict("**PASS** the answer is right") is True
+    assert parse_verdict("<think>FAIL? no</think>PASS") is True
+    assert parse_verdict("The answer passes") is None
+    assert parse_verdict("") is None
+
+
+def test_judge_is_deterministic_and_unparseable_is_fail():
+    llm = _FakeLLM([("CRITERION", "maybe")])
+    ok, raw = judge(llm, "must say 400", "400 days", model="judge-m")
+    assert ok is False and raw == "maybe"
+    call = llm.calls[0]
+    assert call["temperature"] == 0 and call["seed"] == 0 and call["model"] == "judge-m"
+    assert "must say 400" in call["prompt"] and "400 days" in call["prompt"]
+
+
+def _judge_case(tmp_path, rubric):
+    return load_cases(_cases_file(tmp_path, [json.dumps({"id": "j", "task": "rag", "input": "Q?", "rubric": rubric})]))
+
+
+def test_judge_fail_zeroes_a_keyword_pass(tmp_path):
+    cases = _judge_case(tmp_path, {"contains": ["400"], "judge": "400 days is current"})
+    answer = _FakeLLM([("Q?", "90 days, not 400")])
+    grader = _FakeLLM([("CRITERION", "FAIL")])
+    r = run_cases(cases, answer, threshold=0.8, judge_llm=grader)[0]
+    assert r.keyword_score == 1.0 and r.judged is False
+    assert r.score == 0.0 and r.passed is False
+
+
+def test_judge_pass_keeps_the_keyword_score_and_cannot_rescue_a_miss(tmp_path):
+    cases = _judge_case(tmp_path, {"contains": ["400"], "judge": "400 days is current"})
+    ok = run_cases(cases, _FakeLLM([("Q?", "400 days")]), threshold=0.8, judge_llm=_FakeLLM([("CRITERION", "PASS")]))[0]
+    assert ok.score == 1.0 and ok.passed and ok.judged is True
+    miss = run_cases(cases, _FakeLLM([("Q?", "90 days")]), threshold=0.8, judge_llm=_FakeLLM([("CRITERION", "PASS")]))[0]
+    assert miss.score == 0.0 and not miss.passed
+
+
+def test_judge_runs_after_all_answers(tmp_path):
+    lines = [json.dumps({"id": f"c{i}", "task": "t", "input": f"Q{i}?", "rubric": {"judge": "x"}}) for i in range(3)]
+    shared = _FakeLLM([("CRITERION", "PASS")])
+    run_cases(load_cases(_cases_file(tmp_path, lines)), shared, threshold=0.8)
+    kinds = ["judge" if "CRITERION" in c["prompt"] else "answer" for c in shared.calls]
+    assert kinds == ["answer"] * 3 + ["judge"] * 3
+
+
+def test_judge_against_the_stdlib_mock_fails_closed(mock_endpoint, tmp_path):
+    # The mock answers "ok" to everything: not a verdict, so the judged case must fail.
+    cases = _judge_case(tmp_path, {"contains": ["ok"], "judge": "anything"})
+    r = run_cases(cases, _llm(mock_endpoint), threshold=0.8)[0]
+    assert r.keyword_score == 1.0 and r.judged is False and r.passed is False
+
+
+def test_a_case_error_scores_zero_without_aborting_the_run(tmp_path):
+    lines = [
+        '{"id":"boom","task":"t","input":"BOOM","rubric":{}}',
+        '{"id":"fine","task":"t","input":"x","rubric":{"contains":["ok"]}}',
+    ]
+    llm = _FakeLLM([("BOOM", LLMError("empty response"))])
+    by = {r.id: r for r in run_cases(load_cases(_cases_file(tmp_path, lines)), llm, threshold=0.8)}
+    assert by["boom"].error and by["boom"].score == 0.0 and not by["boom"].passed
+    assert by["fine"].passed
+
+
+# --- long documents: deterministic, and noise can never forge an answer ---
+def test_documents_are_deterministic():
+    build.cache_clear()
+    first = {n: build(n) for n in ("ops_log", "worker_log", "docs_corpus")}
+    build.cache_clear()
+    assert first == {n: build(n) for n in first}
+
+
+def test_ops_log_planted_facts():
+    log = build("ops_log")
+    failed_0812 = re.findall(r"^2026-08-12T\S+ ERROR \[deployer\] deploy DEP-\d+ env=prod status=FAILED", log, re.M)
+    assert len(failed_0812) == 7
+    deploy_lines = [ln for ln in log.splitlines() if re.search(r"deploy|DEP-", ln)]
+    assert len(deploy_lines) == 27 and all("[deployer]" in ln for ln in deploy_lines)  # never filler
+    assert not re.search(r"^2026-08-20T\S+ .*env=prod status=SUCCEEDED", log, re.M)
+    assert len(re.findall(r"customer-facing|returning 503 to customers", log)) == 2
+    assert len(set(re.findall(r"INC-\d+", log))) == 4
+    assert "PostgreSQL 17" in log
+
+
+def test_worker_log_planted_facts_match_the_case_answer():
+    ids = sorted(re.findall(r"ERROR \[billing-worker\] job invoice-run failed code=E_TIMEOUT req=(R-\d+)", build("worker_log")))
+    case = next(c for c in load_cases(REPO / "eval" / "cases.jsonl") if c["id"] == "long-extract-worker-errors")
+    assert ids == case["rubric"]["json_equals"]
+    assert build("worker_log").count("billing-") == 18  # 17 planted error/warn lines + 1 retry note
+
+
+def test_docs_corpus_only_planted_docs_mention_audit_or_retention():
+    docs = build("docs_corpus").split("\n\n")
+    hits = [d.split("]")[0] for d in docs if re.search(r"audit|retention|retained", d, re.I)]
+    assert hits == ["[DOC-041", "[DOC-077", "[DOC-118", "[DOC-124"]
+
+
+def test_repo_cases_are_well_formed():
+    for c in load_cases(REPO / "eval" / "cases.jsonl"):
+        rubric = c["rubric"]
+        if "regex_full" in rubric:
+            re.compile(rubric["regex_full"])
+        for p in rubric.get("patterns", []):
+            re.compile(p)
+        if "document" in c:
+            assert "{{DOCUMENT}}" in c["input"]
+            assert len(case_prompt(c)) > 40_000
+
+
+def test_business_day_case_premise_holds():
+    assert date(2026, 3, 20).weekday() == 4  # the case says Friday
+
+
+# --- judge calibration + rescoring ---------------------------------------
+from eval.rescore import ReplayLLM, rescore  # noqa: E402
+from eval.run import calibrate_judge, write_outputs  # noqa: E402
+
+
+def test_calibration_file_is_valid_and_balanced():
+    items = load_cases(REPO / "eval" / "judge_calibration.jsonl")
+    assert len(items) >= 6 and len({i["id"] for i in items}) == len(items)
+    assert {True, False} <= {i["expected"] for i in items}
+
+
+def test_calibrate_judge_counts_disagreements(tmp_path):
+    p = _cases_file(tmp_path, [
+        json.dumps({"id": "a", "criterion": "C-A", "answer": "x", "expected": True}),
+        json.dumps({"id": "b", "criterion": "C-B", "answer": "y", "expected": False}),
+    ])
+    always_pass = _FakeLLM([("CRITERION", "PASS")])
+    assert calibrate_judge(always_pass, "j", p) == {"agree": 1, "total": 2, "disagreements": ["b"]}
+
+
+def test_rescore_replays_saved_answers_under_current_rubrics(tmp_path, monkeypatch):
+    cases = [
+        {"id": "k", "task": "t", "input": "Q1", "rubric": {"contains": ["yes"]}},
+        {"id": "j", "task": "t", "input": "Q2", "rubric": {"contains": ["400"], "judge": "400 is right"}},
+        {"id": "e", "task": "t", "input": "Q3", "rubric": {}},
+    ]
+    monkeypatch.setattr("eval.rescore.load_cases", lambda path=None: cases if path is None else load_cases(path))
+    first = run_cases(cases, _FakeLLM([("Q1", "yes"), ("Q2", "400 days"), ("Q3", LLMError("timeout"))]),
+                      threshold=0.8, judge_llm=_FakeLLM([("CRITERION", "PASS")]))
+    out = tmp_path / "outputs.jsonl"
+    write_outputs(out, first, model="m", judge_model="j")
+    grader = _FakeLLM([("CRITERION", "FAIL")])
+    results, model = rescore(out, threshold=0.8, judge_llm=grader, judge_model="j")
+    by = {r.id: r for r in results}
+    assert model == "m"
+    assert by["k"].passed and by["j"].judged is False and not by["j"].passed
+    assert by["e"].error == "timeout" and not by["e"].passed
+    assert all("Q1" not in c["prompt"] for c in grader.calls)  # the answer model was never asked again
+
+
+def test_replay_llm_maps_prompts_to_saved_output():
+    cases = [{"id": "a", "input": "P"}]
+    assert ReplayLLM(cases, {"a": {"output": "saved", "error": None}}).chat([{"role": "user", "content": "P"}]) == "saved"
+
+
+def test_write_report_stamps_judge_calibration(mock_endpoint, tmp_path):
+    results = _mixed_results(mock_endpoint, tmp_path)
+    report = write_report(results, threshold=0.8, model="m", out_dir=tmp_path, today="d", judge_model="j",
+                          calibration={"agree": 7, "total": 8, "disagreements": ["cal-x"]})
+    text = report.read_text(encoding="utf-8")
+    assert "calibration 7/8" in text and "UNRELIABLE on cal-x" in text

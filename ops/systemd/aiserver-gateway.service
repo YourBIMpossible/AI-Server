@@ -1,0 +1,24 @@
+# AI-Server API-key gateway (WP-E). Installed by scripts/setup-ops.sh.
+[Unit]
+Description=AI-Server API-key gateway (LAN/tailnet -> local inference endpoint)
+# Binding a tailnet address fails until tailscaled has brought the interface up.
+After=network-online.target tailscaled.service ollama.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/ai-server/gateway.env
+# An empty key would make the matcher accept "Authorization: Bearer " -- refuse to start.
+ExecStartPre=/bin/sh -c 'test "$${#INFERENCE_API_KEY}" -ge 32 || { echo "INFERENCE_API_KEY missing or shorter than 32 characters" >&2; exit 1; }'
+ExecStart=/usr/local/bin/caddy run --adapter caddyfile --config /etc/ai-server/Caddyfile
+DynamicUser=yes
+StateDirectory=aiserver-gateway
+Environment=XDG_DATA_HOME=/var/lib/aiserver-gateway XDG_CONFIG_HOME=/var/lib/aiserver-gateway
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

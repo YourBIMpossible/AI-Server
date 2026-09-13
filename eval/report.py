@@ -21,18 +21,45 @@ def routing_table(results, threshold: float) -> list[tuple[str, float, str]]:
     return rows
 
 
-def write_report(results, *, threshold: float, model: str, out_dir: Path, today: str) -> Path:
+def _tier_line(results) -> str:
+    tiers: dict[str, list] = {}
+    for r in results:
+        tiers.setdefault(getattr(r, "tier", "basic"), []).append(r)
+    return " · ".join(
+        f"{tier}: {sum(1 for r in group if r.passed)}/{len(group)}" for tier, group in sorted(tiers.items())
+    )
+
+
+def write_report(
+    results,
+    *,
+    threshold: float,
+    model: str,
+    out_dir: Path,
+    today: str,
+    judge_model: str | None = None,
+    calibration: dict | None = None,
+) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = routing_table(results, threshold)
     n_pass = sum(1 for r in results if r.passed)
     baseline_n = sum(1 for r in results if r.baseline is not None)
+    judge_note = f"`{judge_model}`" if judge_model else "none"
+    if judge_model and judge_model == model:
+        judge_note += " (self-judged)"
+    if calibration:
+        judge_note += f", calibration {calibration['agree']}/{calibration['total']}"
+        if calibration["disagreements"]:
+            judge_note += f" — UNRELIABLE on {', '.join(calibration['disagreements'])}; review judged verdicts"
 
     lines = [
         f"# Eval report — {today}",
         "",
         f"_Local model: `{model}` · {n_pass}/{len(results)} cases passed · "
-        f"pass threshold {threshold:.2f} · Claude baseline: "
+        f"pass threshold {threshold:.2f} · judge: {judge_note} · Claude baseline: "
         f"{'on' if baseline_n else 'skipped (no ANTHROPIC_API_KEY)'}._",
+        "",
+        f"By tier — {_tier_line(results)}",
         "",
         "## Routing recommendation",
         "",
@@ -42,10 +69,26 @@ def write_report(results, *, threshold: float, model: str, out_dir: Path, today:
     for task, rate, recommendation in rows:
         lines.append(f"| {task} | {rate*100:.0f}% | {recommendation} |")
 
-    lines += ["", "## Per-case results", "", "| Case | Task | Score | Passed | Baseline score |", "|------|------|-------|--------|----------------|"]
+    lines += [
+        "",
+        "## Per-case results",
+        "",
+        "| Case | Task | Tier | Score | Keywords | Judge | Passed | Seconds | Baseline score |",
+        "|------|------|------|-------|----------|-------|--------|---------|----------------|",
+    ]
     for r in results:
         baseline_col = f"{r.baseline_score:.2f}" if r.baseline_score is not None else "—"
-        lines.append(f"| {r.id} | {r.task} | {r.score:.2f} | {'yes' if r.passed else 'no'} | {baseline_col} |")
+        judged = getattr(r, "judged", None)
+        judge_col = "—" if judged is None else ("PASS" if judged else "FAIL")
+        kw = getattr(r, "keyword_score", None)
+        kw_col = f"{kw:.2f}" if kw is not None else "—"
+        secs = getattr(r, "elapsed_s", None)
+        secs_col = f"{secs:.1f}" if secs is not None else "—"
+        err = " (error)" if getattr(r, "error", None) else ""
+        lines.append(
+            f"| {r.id} | {r.task} | {getattr(r, 'tier', 'basic')} | {r.score:.2f} | {kw_col} | {judge_col} | "
+            f"{'yes' if r.passed else 'no'}{err} | {secs_col} | {baseline_col} |"
+        )
     lines.append("")
 
     if baseline_n:
