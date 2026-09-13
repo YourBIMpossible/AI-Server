@@ -32,7 +32,9 @@ Write-Host "Waiting for Ollama service..."
 $ok = $false
 for ($i = 0; $i -lt 30; $i++) {
     try {
-        Invoke-RestMethod -Uri 'http://localhost:11434/api/tags' -TimeoutSec 2 | Out-Null
+        # The portable readiness check: /v1/models is what clients actually depend on,
+        # and what a replacement runner would also have to answer.
+        Invoke-RestMethod -Uri 'http://localhost:11434/v1/models' -TimeoutSec 2 | Out-Null
         $ok = $true; break
     } catch { Start-Sleep -Seconds 1 }
 }

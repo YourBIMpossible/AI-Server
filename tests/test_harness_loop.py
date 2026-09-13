@@ -37,7 +37,7 @@ class _BoomSkill(Skill):
 def _llm(url, tmp_path):
     cfg = load_config(
         dotenv=tmp_path / "none.env",
-        overrides={"OLLAMA_HOST": url, "OUT": str(tmp_path / "out")},
+        overrides={"INFERENCE_BASE_URL": url, "OUT": str(tmp_path / "out")},
     )
     return LLM(cfg, retries=0)
 

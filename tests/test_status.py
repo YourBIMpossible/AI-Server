@@ -20,7 +20,7 @@ def _load():
 def _cfg(tmp_path, host="http://127.0.0.1:1"):
     return load_config(
         dotenv=REPO / "no-such.env",
-        overrides={"OUT": str(tmp_path / "out"), "OLLAMA_HOST": host},
+        overrides={"OUT": str(tmp_path / "out"), "INFERENCE_BASE_URL": host},
     )
 
 
@@ -70,6 +70,17 @@ def test_endpoint_status_up_against_mock(mock_endpoint, tmp_path):
     st = mod.endpoint_status(_cfg(tmp_path, host=mock_endpoint), timeout=3)
     assert st["up"] is True
     assert "mock-model" in st["models_available"]
+
+
+def test_endpoint_status_up_when_runner_has_no_api_ps(embed_endpoint, tmp_path):
+    """A runner that isn't Ollama serves /v1/models but not /api/ps. That is a missing
+    enrichment, not a dead endpoint -- `up` must stay True and the gap be declared."""
+    mod = _load()
+    st = mod.endpoint_status(_cfg(tmp_path, host=embed_endpoint), timeout=3)
+    assert st["up"] is True
+    assert st["models_available"] == ["mock-embed"]
+    assert st["models_loaded_supported"] is False
+    assert st["models_loaded"] == []
 
 
 def test_build_status_is_json_serializable(mock_endpoint, tmp_path):

@@ -6,7 +6,24 @@ qwen2.5-coder:14b
 # Embeddings — for Stage 3 RAG.
 nomic-embed-text
 
-# --- On the 3090 box (24GB), step the workhorse up by editing .env MODEL to one of: ---
-#   qwen2.5-coder:32b     # fits 24GB at Q4 (~20GB)
-#   llama3.3:70b          # tight quant; best answer quality for RAG
-# (Newest Qwen3.6 GGUFs need llama.cpp until Ollama supports them — see relocate.md.)
+# --- On the 3090 box (24GB) ---
+#
+# Deliberately no pinned recommendation here. The June 2026 picks (qwen2.5-coder:32b,
+# llama3.3:70b) went stale inside twelve weeks, and hard-coding replacements just repeats
+# the mistake. Pick at build time, on evidence:
+#
+#   1. Check what is actually current -- the ollama library, not a blog post.
+#   2. Budget ~20GB for a 27-30B Q4 at 32k with f16 KV. That is the real ceiling.
+#   3. Score the candidates with the WP-F eval harness before adopting one, and score
+#      SEMANTICS, not just schema validity: on the rig, structural validity was 5/5 while
+#      classification accuracy sat at 8/10.
+#
+# Known constraints as of 2026-09-10:
+#   - qwen2.5-coder:14b cannot drive a tool loop (returns tool calls as plain text).
+#     Fine as a chat/summarization model; never as an agent.
+#   - Qwen3.6 GGUFs with an mmproj still fail to load in Ollama (ollama#14730, #15898).
+#     Text-only variants work.
+#   - Prefill dominates wall time at long context -- optimize for prefill throughput,
+#     not headline decode tok/s.
+#
+# See decisions/2026-09-10__box-build-reassessment.md.

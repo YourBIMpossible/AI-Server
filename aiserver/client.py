@@ -1,7 +1,10 @@
 """OpenAI-compatible client for the local endpoint (chat + embeddings).
 
-Talks only to the HTTP API (/v1/chat/completions, /v1/embeddings, /api/tags) so it is
-runtime-agnostic: Ollama now, llama.cpp/vLLM later, with no code change.
+Talks only to the OpenAI-compatible surface -- chat/completions, embeddings, models --
+relative to the configured base URL. Nothing here is Ollama-specific, so the runner
+behind the endpoint is a replaceable implementation detail: Ollama, llama.cpp or vLLM,
+with no code change. Keep it that way; runner-native paths belong in ops tooling, not
+here.
 """
 from __future__ import annotations
 
@@ -47,7 +50,8 @@ class LLM:
         self.timeout = timeout
         self.retries = retries
         self.backoff = backoff
-        self.api_key = api_key  # optional, for a Caddy/api-key gateway (WP-E)
+        # Optional, for an api-key gateway in front of the endpoint (WP-E).
+        self.api_key = api_key if api_key is not None else (self.cfg.inference_api_key or None)
 
     def _headers(self) -> dict[str, str]:
         h = {"Content-Type": "application/json"}
@@ -84,7 +88,7 @@ class LLM:
             raise LLMError(f"{url} failed after {self.retries + 1} attempts: {last}") from last
         raise LLMError(
             f"Could not reach {url}: {last}. Is the endpoint up "
-            f"(OLLAMA_HOST={self.cfg.ollama_host})?"
+            f"(INFERENCE_BASE_URL={self.cfg.inference_base_url})?"
         )
 
     def chat_message(
@@ -105,7 +109,7 @@ class LLM:
         }
         if tools is not None:
             payload["tools"] = tools
-        data = self._post("/v1/chat/completions", payload)
+        data = self._post("/chat/completions", payload)
         try:
             raw = data["choices"][0]["message"]
         except (KeyError, IndexError, TypeError) as e:
@@ -164,7 +168,7 @@ class LLM:
 
     def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         payload = {"model": model or self.cfg.embed_model, "input": texts}
-        data = self._post("/v1/embeddings", payload)
+        data = self._post("/embeddings", payload)
         try:
             # The OpenAI-compatible shape doesn't guarantee response order matches
             # input order; each item's `index` is the authoritative position.
@@ -174,9 +178,13 @@ class LLM:
             raise LLMError(f"Unexpected embeddings response shape: {e}") from e
 
     def ping(self) -> bool:
-        """True if the endpoint answers GET /api/tags."""
+        """True if the endpoint answers GET /models.
+
+        Deliberately the OpenAI-compatible path, not Ollama's /api/tags: every candidate
+        runner serves this one, so a runner swap does not change liveness checking.
+        """
         try:
-            req = urllib.request.Request(f"{self.cfg.base_url}/api/tags", headers=self._headers())
+            req = urllib.request.Request(f"{self.cfg.base_url}/models", headers=self._headers())
             with urllib.request.urlopen(req, timeout=5) as r:
                 return r.status == 200
         except urllib.error.URLError:

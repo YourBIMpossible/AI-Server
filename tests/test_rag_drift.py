@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 
 def _embed(url):
-    cfg = load_config(dotenv=REPO / "no-such.env", overrides={"OLLAMA_HOST": url})
+    cfg = load_config(dotenv=REPO / "no-such.env", overrides={"INFERENCE_BASE_URL": url})
     return LLM(cfg, retries=0).embed
 
 

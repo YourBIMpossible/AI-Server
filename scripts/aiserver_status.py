@@ -5,7 +5,8 @@ The Dashboard is a static site refreshed by a *local* Claude session; it cannot 
 LAN-only inference endpoint from the cloud. This helper runs DURING that local refresh and
 prints a compact JSON snapshot the refresh embeds in `data.js`:
 
-  - endpoint up/down + models available (`/api/tags`) and loaded (`/api/ps`)  -- LAN-only
+  - endpoint up/down + models available (OpenAI-compatible `/v1/models`), plus loaded
+    models when the runner happens to expose Ollama's `/api/ps`  -- LAN-only
   - the newest output of each automation job (digest / weekly-rollup / decision-drift)
 
 Read-only. Run:  python scripts/aiserver_status.py
@@ -90,15 +91,32 @@ def _names(data) -> list[str]:
     return [m.get("name") for m in (data.get("models") or []) if m.get("name")] if data else []
 
 
+def _openai_model_ids(data) -> list[str]:
+    return [m.get("id") for m in (data.get("data") or []) if m.get("id")] if data else []
+
+
+def _server_root(base_url: str) -> str:
+    """Strip the OpenAI path suffix to reach the runner's own root."""
+    return base_url[: -len("/v1")] if base_url.endswith("/v1") else base_url
+
+
 def endpoint_status(cfg, timeout: float = 4.0) -> dict:
-    """Poll the endpoint: up/down + available (/api/tags) and loaded (/api/ps) models."""
-    tags = _fetch(cfg.base_url, "/api/tags", timeout)
-    up = tags is not None
+    """Poll the endpoint.
+
+    Liveness and the available-model list come from the portable `/models`, so this keeps
+    working across runners. Loaded-model detail is Ollama's `/api/ps` with no OpenAI
+    equivalent -- it is a best-effort enrichment, absent on other runners rather than a
+    failure. Don't promote it into the portable path.
+    """
+    models = _fetch(cfg.base_url, "/models", timeout)
+    up = models is not None
+    loaded = _fetch(_server_root(cfg.base_url), "/api/ps", timeout) if up else None
     return {
         "up": up,
         "host": cfg.base_url,
-        "models_available": _names(tags),
-        "models_loaded": _names(_fetch(cfg.base_url, "/api/ps", timeout)) if up else [],
+        "models_available": _openai_model_ids(models),
+        "models_loaded": _names(loaded),
+        "models_loaded_supported": loaded is not None,
     }
 
 

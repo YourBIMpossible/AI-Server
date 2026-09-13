@@ -63,7 +63,11 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path == "/api/tags":
+        if self.path == "/v1/models":
+            # The portable liveness + available-models path; every candidate runner
+            # serves this, which is why the client and status helper use it.
+            self._send({"data": [{"id": "mock-model", "object": "model"}]})
+        elif self.path == "/api/tags":
             self._send({"models": [{"name": "mock-model"}]})
         elif self.path == "/api/ps":
             # TEST-3: real Ollama exposes /api/ps (currently-loaded models); the
@@ -144,7 +148,9 @@ class _EmbedHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path == "/api/tags":
+        if self.path == "/v1/models":
+            self._send({"data": [{"id": "mock-embed", "object": "model"}]})
+        elif self.path == "/api/tags":
             self._send({"models": [{"name": "mock-embed"}]})
         else:
             self.send_response(404)

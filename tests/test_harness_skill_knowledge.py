@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 def _llm(url, out_dir):
     cfg = load_config(
-        dotenv=REPO / "no-such.env", overrides={"OLLAMA_HOST": url, "OUT": str(out_dir)}
+        dotenv=REPO / "no-such.env", overrides={"INFERENCE_BASE_URL": url, "OUT": str(out_dir)}
     )
     return LLM(cfg, retries=0)
 

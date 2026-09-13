@@ -10,7 +10,7 @@ from conftest import _running, _sequenced_server
 
 
 def _cfg(tmp_path, host):
-    return load_config(dotenv=tmp_path / "none.env", overrides={"OLLAMA_HOST": host})
+    return load_config(dotenv=tmp_path / "none.env", overrides={"INFERENCE_BASE_URL": host})
 
 
 def test_chat_message_returns_final_content_with_no_tool_calls(tmp_path):

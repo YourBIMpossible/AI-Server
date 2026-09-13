@@ -12,9 +12,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 _DEFAULTS = {
-    "OLLAMA_HOST": "http://localhost:11434",
-    "MODEL": "qwen2.5-coder:14b",
-    "EMBED_MODEL": "nomic-embed-text",
+    "INFERENCE_BASE_URL": "http://localhost:11434/v1",
+    "INFERENCE_API_KEY": "",
+    "INFERENCE_MODEL": "qwen2.5-coder:14b",
+    "INFERENCE_EMBED_MODEL": "nomic-embed-text",
     "WORKSPACE": r"F:\BIMpossible-Workspace",
     "OUT": "./out",
     "DIGEST_DAYS": "7",
@@ -26,7 +27,7 @@ _DEFAULTS = {
 
 
 def _strip_quotes(v: str) -> str:
-    """Strip one layer of matching outer quotes, e.g. MODEL="qwen2.5-coder:14b"."""
+    """Strip one layer of matching outer quotes, e.g. INFERENCE_MODEL="local-workhorse"."""
     if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
         return v[1:-1]
     return v
@@ -57,9 +58,53 @@ def _read_dotenv(path: Path) -> dict[str, str]:
     return env
 
 
+def _normalize_base_url(raw: str) -> str:
+    """Resolve the configured endpoint to a full OpenAI-compatible base URL.
+
+    A bare host:port gets `/v1` appended, because that is where Ollama, llama.cpp and
+    vLLM all serve the OpenAI-compatible surface. An explicit path is respected as
+    given, so a gateway that mounts the API somewhere else still works.
+    """
+    url = raw.rstrip("/")
+    rest = url.split("://", 1)[-1]
+    has_path = "/" in rest
+    return url if has_path else f"{url}/v1"
+
+
+# Keys retired on 2026-09-11, when the client contract was decoupled from Ollama: the
+# contract is an OpenAI-compatible endpoint, and the runner behind it is replaceable.
+# OLLAMA_HOST also collided with Ollama's own server-side bind address, which uses that
+# exact name on the box -- two different meanings, one name.
+_RENAMED = {
+    "OLLAMA_HOST": (
+        "INFERENCE_BASE_URL",
+        "include the /v1 suffix, e.g. INFERENCE_BASE_URL=http://localhost:11434/v1",
+    ),
+    "OLLAMA_API_KEY": ("INFERENCE_API_KEY", "same value, new name"),
+    "MODEL": ("INFERENCE_MODEL", "prefer a server-side alias over a runner-specific pull tag"),
+    "EMBED_MODEL": ("INFERENCE_EMBED_MODEL", "same value, new name"),
+}
+
+
+def _check_renamed_keys(dotenv_values: dict[str, str]) -> None:
+    """Fail loudly on a stale .env key instead of silently using the built-in default.
+
+    Only the .env file is checked, not the process environment: `OLLAMA_HOST` is a
+    legitimate *server-side* variable on the box, and a .env that sets both the old and
+    the new name is fine -- the new one wins.
+    """
+    for old, (new, hint) in _RENAMED.items():
+        if old in dotenv_values and new not in dotenv_values:
+            raise ValueError(
+                f"{old} is no longer read. Rename it to {new} in your .env "
+                f"({hint}) -- see .env.example."
+            )
+
+
 @dataclass(frozen=True)
 class Config:
-    ollama_host: str
+    inference_base_url: str
+    inference_api_key: str
     model: str
     embed_model: str
     workspace: Path
@@ -72,27 +117,31 @@ class Config:
 
     @property
     def base_url(self) -> str:
-        return self.ollama_host.rstrip("/")
+        return _normalize_base_url(self.inference_base_url)
 
 
 def load_config(
     dotenv: Path | None = None,
     overrides: dict[str, str] | None = None,
 ) -> Config:
+    dotenv_values = _non_empty(_read_dotenv(dotenv if dotenv is not None else REPO_ROOT / ".env"))
     merged = dict(_DEFAULTS)
-    merged.update(_non_empty(_read_dotenv(dotenv if dotenv is not None else REPO_ROOT / ".env")))
+    merged.update(dotenv_values)
     merged.update(_non_empty({k: os.environ[k] for k in _DEFAULTS if k in os.environ}))
     if overrides:
         merged.update(overrides)
+
+    _check_renamed_keys(dotenv_values)
 
     out = Path(merged["OUT"])
     if not out.is_absolute():
         out = REPO_ROOT / out
 
     return Config(
-        ollama_host=merged["OLLAMA_HOST"],
-        model=merged["MODEL"],
-        embed_model=merged["EMBED_MODEL"],
+        inference_base_url=merged["INFERENCE_BASE_URL"],
+        inference_api_key=merged["INFERENCE_API_KEY"],
+        model=merged["INFERENCE_MODEL"],
+        embed_model=merged["INFERENCE_EMBED_MODEL"],
         workspace=Path(merged["WORKSPACE"]),
         out=out,
         digest_days=_cast("DIGEST_DAYS", merged["DIGEST_DAYS"], int),

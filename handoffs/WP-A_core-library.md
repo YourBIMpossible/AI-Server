@@ -16,8 +16,9 @@ and `log.get_logger`, and keep behaviour identical.
 
 - `scripts/smoke-test.py` and `automation/daily_digest.py` each inline a `.env` loader and
   raw `urllib` calls to `/v1/chat/completions`. That duplication is the thing to fix.
-- Config keys are defined in `.env.example`: `OLLAMA_HOST`, `MODEL`, `EMBED_MODEL`,
-  `WORKSPACE`, `OUT`, `DIGEST_DAYS`.
+- Config keys are defined in `.env.example`: `INFERENCE_BASE_URL`, `INFERENCE_API_KEY`,
+  `INFERENCE_MODEL`, `INFERENCE_EMBED_MODEL`, `WORKSPACE`, `OUT`, `DIGEST_DAYS`. (Renamed
+  2026-09-11 from `OLLAMA_HOST`/`MODEL`/`EMBED_MODEL`; `config.py` raises on the old names.)
 
 ## Deliverables
 
