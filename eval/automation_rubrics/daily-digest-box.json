@@ -1,0 +1,9 @@
+{
+  "job": "daily-digest",
+  "about": "Grades the real daily-digest job run on the box against the box's own engineering record (scripts/automation_acceptance.py builds the workspace). Facts below are present in that record: today's AI-Server commits and the Phase 0 remeasure decision doc.",
+  "rubric": {
+    "contains_any": ["gateway", "API-key", "API key"],
+    "patterns": ["(?i)(20\\s?s\\b|20-second|latency gate|20 s gate)", "(?i)cold[- ]?load"],
+    "judge": "The source logs say: (a) an API-key gateway was built for the endpoint (WP-E); (b) the eval harness was changed so it separates models (WP-F); (c) the 14B model still misses its 20 s latency gate; (d) cold model loads now take seconds, so the old 56-75 s cold-load penalty is gone. PASS only if the digest correctly reports at least three of (a)-(d) and states nothing that contradicts them, for example that the 14B clears its gate, or that a model or runner was chosen or adopted."
+  }
+}
