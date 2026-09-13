@@ -121,3 +121,11 @@ def test_gateway_unit_refuses_a_missing_or_short_key():
 def test_setup_ops_refuses_public_binds():
     script = (REPO / "scripts" / "setup-ops.sh").read_text(encoding="utf-8")
     assert "refusing to bind non-private address" in script
+
+
+def test_setup_ops_never_sources_the_environment_file_and_keeps_the_key():
+    script = (REPO / "scripts" / "setup-ops.sh").read_text(encoding="utf-8")
+    code = "\n".join(ln for ln in script.splitlines() if not ln.strip().startswith("#"))
+    assert ". /etc/ai-server/gateway.env" not in code and "source /etc/ai-server/gateway.env" not in code
+    assert 'if [ -f /etc/ai-server/gateway.env ]; then' in code  # an existing key is never regenerated
+    assert "systemctl restart aiserver-gateway.service" in code  # a re-run applies config changes

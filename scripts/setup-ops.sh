@@ -73,12 +73,15 @@ for u in aiserver-gateway.service aiserver-preload.service aiserver-endpoint-wat
   sed -e "s#@REPO@#$ROOT#g" -e "s#@USER@#$RUN_USER#g" "$ROOT/ops/systemd/$u" > "/etc/systemd/system/$u"
 done
 systemctl daemon-reload
-systemctl enable --now aiserver-gateway.service aiserver-endpoint-watch.timer
-systemctl enable aiserver-preload.service
+systemctl enable aiserver-gateway.service aiserver-endpoint-watch.timer aiserver-preload.service
+# restart, not start: a re-run must pick up a changed Caddyfile or unit
+systemctl restart aiserver-gateway.service
+systemctl start aiserver-endpoint-watch.timer
 
 echo "=== 4. Verify the gateway ==="
-# shellcheck disable=SC1091
-. /etc/ai-server/gateway.env
+# gateway.env is a systemd EnvironmentFile (KEY=value, value taken verbatim, spaces included).
+# Never source it as shell: GATEWAY_BIND holds several space-separated addresses.
+INFERENCE_API_KEY="$(sed -n 's/^INFERENCE_API_KEY=//p' /etc/ai-server/gateway.env | head -1)"
 sleep 2
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 no_key="$(code "http://127.0.0.1:$PORT/v1/models")"
