@@ -137,6 +137,84 @@ def test_git_wrappers_are_bounded_and_validated(repo):
         Sandbox(repo).git_log(path="../outside.txt")
 
 
+def test_hostile_repo_config_cannot_run_external_command(repo, tmp_path):
+    # The target repo is untrusted. Its own .git/config must never make an inspection command
+    # execute code -- git's command-valued keys (diff.external, core.fsmonitor, core.pager,
+    # core.sshCommand, credential.helper, ext:: protocol) are all neutralised by _GIT_HARDENING.
+    sentinel = tmp_path / "pwned.txt"
+    driver = tmp_path / "driver.py"
+    driver.write_text(f"open({str(sentinel)!r}, 'w').close()\n")
+    py = sys.executable.replace("\\", "/")
+    drv = str(driver).replace("\\", "/")
+    payload = f'"{py}" "{drv}"'  # forward slashes + quotes so git's shell runs it verbatim
+    (repo / "README.md").write_text("# demo\nchanged\n")
+
+    # Positive control: a RAW diff that honours the repo's diff.external DOES run the driver,
+    # proving the planted config is a genuinely live command-execution vector.
+    _git(repo, "config", "diff.external", payload)
+    subprocess.run(["git", "-C", str(repo), "diff", "--ext-diff"], capture_output=True,
+                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    if not sentinel.exists():
+        pytest.skip("this git build does not run diff.external as configured; control vacuous")
+    sentinel.unlink()
+
+    # Now plant every command-valued key and prove the sandbox fires NONE of them, across every
+    # git wrapper it exposes (rev-parse, status, log, diff, path-scoped diff).
+    for key in ("core.fsmonitor", "core.pager", "core.sshCommand", "credential.helper"):
+        _git(repo, "config", key, payload)
+    sb = Sandbox(repo)
+    sb.head_sha()
+    sb.git_status()
+    sb.git_log()
+    sb.git_diff()
+    sb.git_diff(path="README.md")
+    assert not sentinel.exists(), "a hardened git wrapper executed a repo-config command"
+
+
+def test_git_diff_never_leaks_denied_file_contents(repo):
+    # Denied files (secrets/keys) tracked alongside allowed source: the diff shows allowed
+    # content in full and denied content never -- not as hunks, not as headers, not anywhere.
+    for name, before in (("id_rsa", "KEY-BEFORE\n"), ("credentials.json", '{"s":"BEFORE"}\n'),
+                         ("app with space.py", "v = 'SPACE-BEFORE'\n")):
+        (repo / name).write_text(before)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "add secrets + source")
+
+    (repo / "id_rsa").write_text("KEY-LEAKED-XYZ\n")
+    (repo / "credentials.json").write_text('{"s":"LEAKED-XYZ"}\n')
+    (repo / ".env").write_text("SECRET=LEAKED-XYZ\n")  # tracked from the base fixture
+    (repo / "pkg" / "core.py").write_text("def compute(x):\n    return x * 3  # ALLOWED-MARKER\n")
+    (repo / "app with space.py").write_text("v = 'SPACE-ALLOWED-MARKER'\n")
+
+    diff = Sandbox(repo).git_diff()
+    assert "ALLOWED-MARKER" in diff                 # allowed source content is preserved
+    assert "SPACE-ALLOWED-MARKER" in diff           # filename with a space is handled correctly
+    for leaked in ("LEAKED-XYZ", "KEY-LEAKED"):
+        assert leaked not in diff                   # no denied content anywhere in the patch
+    for denied_name in ("id_rsa", "credentials.json", ".env"):
+        assert denied_name not in diff              # not even as a diff/stat header
+
+    # A direct request for a denied path is refused rather than quietly returning its diff.
+    for denied in (".env", "id_rsa", "credentials.json"):
+        with pytest.raises(SandboxError, match="excluded"):
+            Sandbox(repo).git_diff(path=denied)
+
+
+def test_git_diff_rename_into_denied_name_is_excluded(repo):
+    # A rename whose destination is a denied name must drop BOTH endpoints, so content cannot be
+    # surfaced under a denied path; an allowed<->allowed rename is still shown.
+    (repo / "moveme.py").write_text("MOVED-SECRET-CONTENT\n")
+    (repo / "keepme.py").write_text("KEEP-CONTENT\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "add rename sources")
+    _git(repo, "mv", "moveme.py", "id_rsa")      # allowed content renamed INTO a denied name
+    _git(repo, "mv", "keepme.py", "renamed.py")  # allowed -> allowed rename
+
+    diff = Sandbox(repo).git_diff(staged=True)
+    assert "MOVED-SECRET-CONTENT" not in diff and "id_rsa" not in diff  # denied-dest rename dropped
+    assert "renamed.py" in diff                                        # allowed rename still shown
+
+
 def test_run_check_allowlist_only(repo):
     checks = parse_checks([f"py={sys.executable} -c \"import sys; print('ok'); sys.exit(3)\""])
     sb = Sandbox(repo, checks=checks)

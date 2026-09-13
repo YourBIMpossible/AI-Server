@@ -37,6 +37,25 @@ BINARY_EXT = frozenset({
 })
 _GIT_ENV_KEEP = ("PATH", "SYSTEMROOT", "HOME", "USERPROFILE", "TEMP", "TMP", "LANG", "LC_ALL", "PROGRAMDATA")
 _REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/~^-]{0,63}$")
+# The target repo is untrusted: its .git/config (and any global/system config) must never be
+# able to make an inspection command run code. Command-line `-c` wins over every config file,
+# so these overrides neutralise the command-valued keys git would otherwise honour
+# (fsmonitor, pager, hooks, external/ssh drivers, credential helpers, the ext:: protocol).
+_GIT_HARDENING = (
+    "--no-pager",
+    "-c", "core.fsmonitor=false",
+    "-c", "core.hooksPath=" + os.devnull,
+    "-c", "core.pager=cat",
+    "-c", "diff.external=",
+    "-c", "core.sshCommand=false",
+    "-c", "credential.helper=",
+    "-c", "protocol.ext.allow=never",
+    # Config isolation (below) also drops the host's core.autocrlf; pin a deterministic,
+    # host-independent line-ending policy so a cleanly-committed tree diffs as clean everywhere
+    # (input = normalise CRLF->LF for comparison only, never rewrite the working tree).
+    "-c", "core.autocrlf=input",
+    "-c", "core.safecrlf=false",
+)
 
 
 class SandboxError(ValueError):
@@ -224,11 +243,18 @@ class Sandbox:
 
     # -- git -----------------------------------------------------------------
     def _git(self, args: list[str], *, text: bool = True):
+        # Scrubbed env + config isolation: read no global/system config, honour no on-disk
+        # config that could spawn a process, never prompt. Pairs with _GIT_HARDENING (`-c`
+        # overrides beat repo-local .git/config, which git always reads and env cannot disable).
         env = {k: os.environ[k] for k in _GIT_ENV_KEEP if k in os.environ}
         env["GIT_TERMINAL_PROMPT"] = "0"
+        env["GIT_CONFIG_NOSYSTEM"] = "1"
+        env["GIT_CONFIG_GLOBAL"] = os.devnull
+        env["GIT_CONFIG_SYSTEM"] = os.devnull
+        env["GIT_PAGER"] = "cat"
         try:
             proc = subprocess.run(
-                ["git", "-C", str(self.root), *args], capture_output=True, text=text,
+                ["git", *_GIT_HARDENING, "-C", str(self.root), *args], capture_output=True, text=text,
                 timeout=self.limits.git_timeout_s, env=env, check=False, shell=False,
             )
         except FileNotFoundError:
@@ -264,18 +290,64 @@ class Sandbox:
         return self._cap(self._git(args))
 
     def git_diff(self, *, base: str | None = None, path: str | None = None, staged: bool = False) -> str:
+        """A patch that can NEVER carry the contents of a denied file. The denied-path policy
+        that guards read/list/search guards the diff too: denied files (either side of a
+        rename/copy) are excluded before the patch is generated, so their bytes never reach
+        tool output, evidence.json, the transcript or the artifacts. Allowed files are shown
+        in full."""
         self.check_budget()
-        args = ["diff", "--no-color", "--no-ext-diff", "--stat=120", "-p"]
+        if base is not None and not _REF_RE.match(base):
+            raise SandboxError(f"invalid git ref: {base!r}")
+        common = ["--no-color", "--no-ext-diff", "--no-textconv"]
         if staged:
-            args.append("--cached")
-        if base is not None:
-            if not _REF_RE.match(base):
-                raise SandboxError(f"invalid git ref: {base!r}")
-            args.append(base)
-        args.append("--")
+            common.append("--cached")
+        only: str | None = None
         if path:
-            args.append(self.rel(self.resolve(path)))
-        return self._cap(self._git(args))
+            only = self.rel(self.resolve(path))
+            if self.is_denied(only):
+                raise SandboxError(f"path is excluded from diffing: {path!r}")
+        # 1) enumerate changed paths (NUL-safe, no content), then drop the denied ones.
+        name_args = ["diff", "--name-status", "-z", *common]
+        if base is not None:
+            name_args.append(base)
+        name_args.append("--")
+        if only is not None:
+            name_args.append(f":(literal){only}")
+        allowed = self._allowed_diff_paths(self._git(name_args, text=False))
+        if not allowed:
+            return ""  # nothing changed, or every changed file is denied -> no output to leak
+        # 2) the real patch, restricted to exactly the allowed paths (literal pathspecs handle
+        #    spaces / glob metacharacters); a denied file cannot re-enter here.
+        diff_args = ["diff", *common, "--stat=120", "-p"]
+        if base is not None:
+            diff_args.append(base)
+        diff_args.append("--")
+        diff_args += [f":(literal){p}" for p in allowed]
+        return self._cap(self._git(diff_args))
+
+    def _allowed_diff_paths(self, raw: bytes) -> list[str]:
+        """Parse `git diff --name-status -z` output into the set of changed paths that pass
+        the denied-path policy. A rename/copy is kept only if BOTH endpoints are allowed, so a
+        denied source can never be surfaced under an allowed destination name."""
+        tokens = [t.decode("utf-8", "replace").replace("\\", "/") for t in raw.split(b"\x00") if t]
+        allowed: list[str] = []
+        i = 0
+        while i < len(tokens):
+            status = tokens[i]
+            i += 1
+            if status[:1] in ("R", "C"):  # rename/copy: <status>\0<old>\0<new>
+                pair = tokens[i:i + 2]
+                i += 2
+                if len(pair) == 2 and not any(self.is_denied(p) for p in pair):
+                    allowed.extend(pair)
+            elif i < len(tokens):  # add/modify/delete/type-change: <status>\0<path>
+                p = tokens[i]
+                i += 1
+                if not self.is_denied(p):
+                    allowed.append(p)
+        # de-dup, preserve order
+        seen: set[str] = set()
+        return [p for p in allowed if not (p in seen or seen.add(p))]
 
     # -- allowlisted checks --------------------------------------------------
     def run_check(self, name: str) -> tuple[int, str, bool]:

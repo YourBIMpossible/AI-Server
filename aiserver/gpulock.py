@@ -10,8 +10,10 @@ path through ``WP_H_BAKEOFF_LOCK`` and drops to CPU while it exists). ``GPU_LOCK
 
 Semantics:
 
-* acquire = atomic ``O_CREAT|O_EXCL`` create of the file holding a JSON record (schema below).
-  Contention raises ``LockHeldError`` carrying the other holder's record and a staleness verdict.
+* acquire = write the complete JSON record (schema below) to a sibling temp file, then publish
+  it with an atomic ``os.link`` into place -- a reader therefore never sees an empty or
+  half-written lock. Contention (``os.link`` -> ``FileExistsError``) raises ``LockHeldError``
+  carrying the other holder's record and a staleness verdict.
 * release = remove the file, but only if the record still names *this* acquisition (owner
   token + pid); a foreign record is never removed.
 * stale = holder pid not alive on this host, or the record older than ``max_age_s``. Staleness
@@ -26,6 +28,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
@@ -119,9 +122,14 @@ def read_record(path: Path) -> LockRecord | None:
 
 
 def staleness(record: LockRecord | None, *, max_age_s: float = DEFAULT_MAX_AGE_S, now: float | None = None) -> tuple[bool, str]:
-    """(stale?, reason). Unreadable records are stale; foreign-host records are judged by age only."""
+    """(stale?, reason). A genuinely stale lock is one whose *parseable* record shows a dead
+    holder on this host or an age past ``max_age_s``. An empty, partial, malformed or otherwise
+    unreadable record is NOT declared stale: it may be a holder mid-publication or a corrupt
+    file, and either way we never let automatic recovery delete it. Foreign-host records are
+    judged by age only. Removing an unreadable lock is an explicit operator choice (``clear
+    --force``)."""
     if record is None:
-        return True, "record unreadable"
+        return False, "lock present but its record is unreadable; not auto-clearing (use clear --force)"
     now = time.time() if now is None else now
     try:
         started = datetime.fromisoformat(record.started).timestamp()
@@ -152,16 +160,33 @@ def acquire(path: Path, *, purpose: str, owner: str | None = None, expected_clea
         expected_cleanup=expected_cleanup,
         token=uuid.uuid4().hex,
     )
+    # Publish atomically: serialise the *complete* record into a sibling temp file, flush it to
+    # disk, then hard-link it into place. os.link is atomic and fails with FileExistsError if the
+    # lock is already held, so a reader never observes an empty or half-written lock file -- the
+    # publication race (create-empty-then-write) is closed. The temp file is always removed.
+    payload = record.to_json()
+    if not path.parent.exists():
+        raise LockError(f"lock directory {path.parent} does not exist -- see ops/PRODUCTION-CONTRACT.md")
     try:
-        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-    except FileExistsError:
-        other = read_record(path)
-        stale, reason = staleness(other)
-        raise LockHeldError(path, other, stale, reason) from None
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".bakeoff.lock.", suffix=".tmp")
     except FileNotFoundError:
         raise LockError(f"lock directory {path.parent} does not exist -- see ops/PRODUCTION-CONTRACT.md") from None
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        fh.write(record.to_json())
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            other = read_record(path)
+            stale, reason = staleness(other)
+            raise LockHeldError(path, other, stale, reason) from None
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
     return record
 
 
@@ -187,7 +212,10 @@ def clear(path: Path, *, stale_only: bool = True, max_age_s: float = DEFAULT_MAX
     stale, reason = staleness(record, max_age_s=max_age_s)
     if stale_only and not stale:
         raise LockHeldError(path, record, False, reason)
-    os.remove(path)
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        return None
     return record
 
 
@@ -204,8 +232,16 @@ def held(path: Path, *, purpose: str, owner: str | None = None, expected_cleanup
 def run_under_lock(path: Path, argv: list[str], *, purpose: str, owner: str | None = None) -> int:
     """Hold the lock for the lifetime of a child process; return its exit status.
     A Ctrl-C reaches the child too (same process group); we wait for it, then release."""
+    if not argv or not str(argv[0]).strip():
+        raise LockError("run_under_lock requires a non-empty command")
     with held(path, purpose=purpose, owner=owner or argv[0], expected_cleanup=f"{argv[0]} exits"):
-        proc = subprocess.Popen(argv)
+        try:
+            proc = subprocess.Popen(argv)
+        except OSError as exc:
+            # The command could not be launched (missing binary, not executable). The lock is
+            # already released by `held`'s finally; surface this as a LockError so the CLI's
+            # single error path reports it instead of leaking a raw traceback.
+            raise LockError(f"could not launch {argv[0]!r}: {exc}") from None
         try:
             return proc.wait()
         except KeyboardInterrupt:
