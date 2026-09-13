@@ -71,6 +71,35 @@ the `qwen2.5-coder:14b` workhorse above — that model cannot emit real tool cal
 an agent loop. Details, verification, and the full model story: `PROGRAM_PLAN.md` → "Local coding
 agent". Scripts: `F:\AI-Dev\.tools\opencode\`.
 
+## Repo scout (read-only evidence compiler)
+
+`python -m scout` (or `run-scout` once installed) points the production model at one target
+repository with a strictly read-only tool set and writes five artifacts — `project-map.md`,
+`evidence.json`, `implementation-plan.md`, `verification-plan.md`, `handoff.md` — each
+separating verified facts (every one cites an evidence id from the run) from inferences,
+unknowns, risks and next actions. It never modifies the target, never runs a shell, never
+reads outside the target + explicit `--source` files, skips `.env*`/vendor/binary files, and
+writes only into `--out` (default `out/scout/<timestamp>-<slug>/`).
+
+```bash
+python -m scout --repo ../some-repo --task "Add a --json flag to the export command"
+```
+
+Add `--source notes.md` for logs/diffs/acceptance criteria, `--check tests="python -m pytest --collect-only -q"`
+to allowlist a read-only validation command the model may run by name, `--dry-run` to see the
+seeded evidence without a model call. Prompt templates are versioned under `scout/prompts/`;
+the evidence schema and artifact layout are in `scout/evidence.py` / `scout/report.py`. Spec:
+`handoffs/WP-I_repo-scout.md`.
+
+## GPU-work interlock
+
+Runner swaps, bakeoffs and other GPU-monopolising jobs take an exclusive lock
+(`/etc/ai-server/bakeoff.lock`, override `GPU_LOCK_PATH`) so two of them cannot collide:
+`scripts/gpu_lock.py status | run --purpose P -- cmd… | clear`. `scripts/bakeoff-session.sh`
+re-execs itself under the lock. Stale locks are reported, never auto-killed; `clear` refuses a
+live holder without `--force`. Ordinary inference and the scout do not take the lock. Policy and
+preflight: `ops/PRODUCTION-CONTRACT.md`, `decisions/2026-09-13__benchmark-policy.md`.
+
 ## Move to the 3090 box later
 
 See `relocate.md` — and read it, because "one line in `.env`" was wrong: the serving-layer

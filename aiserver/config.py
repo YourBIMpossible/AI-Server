@@ -32,6 +32,9 @@ _DEFAULTS = {
     # and an optional LAN/tailnet webhook that receives it as JSON.
     "ENDPOINT_ALERT_MINUTES": "3",
     "ENDPOINT_ALERT_WEBHOOK": "",
+    # Exclusive-GPU-work interlock file (aiserver/gpulock.py). WP-H convention; Personal-OCR
+    # reads the same path via WP_H_BAKEOFF_LOCK. Ordinary inference never takes it.
+    "GPU_LOCK_PATH": "/etc/ai-server/bakeoff.lock",
     "DICTATION_PROXY_HOST": "127.0.0.1",
     "DICTATION_PROXY_PORT": "11435",
 }
@@ -129,6 +132,7 @@ class Config:
     endpoint_alert_minutes: float = 3.0
     endpoint_alert_webhook: str = ""
     inference_max_input_tokens: int = 32768
+    gpu_lock_path: str = "/etc/ai-server/bakeoff.lock"
 
     @property
     def base_url(self) -> str:
@@ -168,4 +172,5 @@ def load_config(
         eval_judge_model=merged["EVAL_JUDGE_MODEL"],
         endpoint_alert_minutes=_cast("ENDPOINT_ALERT_MINUTES", merged["ENDPOINT_ALERT_MINUTES"], float),
         endpoint_alert_webhook=merged["ENDPOINT_ALERT_WEBHOOK"],
+        gpu_lock_path=merged["GPU_LOCK_PATH"],
     )
