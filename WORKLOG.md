@@ -10,6 +10,12 @@ protocol for the three-door rule this file exists to serve.
   the closeout bar; model currently cold (per-request `keep_alive` from the owner's benchmark
   overrode the server default); three chat UIs found under `~/mybuddy-pilot/`, all
   localhost-only; four unevaluated models pulled 09-13.
+- **2026-09-16 — Handoff validated.** The owner's `handoffs/MYBUDDY-HANDOFF-2026-09-16.md`
+  (imported verbatim) checked against the box: `decisions/2026-09-16__handoff-validation.md`.
+  Confirmed the loopback binds, compose gateway pins, `/srv` ownership, keep-alive override.
+  Corrected: `gemma3:31b` → `gemma4:31b`, sizes were param counts, rig already has key auth
+  (`ssh mybuddy`), gateway `:11440` absent from its picture. UFW rules and `docker ps`
+  unverifiable without sudo.
 
 ## Roadmap
 
@@ -42,6 +48,15 @@ protocol for the three-door rule this file exists to serve.
   Ollama is wired for embeddings only. If LibreChat stays in the pilot it needs a `custom`
   endpoint pointing at the box's OpenAI-compatible URL (ideally through the `:11440` gateway
   with `INFERENCE_API_KEY`, not raw `:11434`).
+- **One-click UI access from the rig (handoff Priority 1).** Key auth already works
+  (`ssh mybuddy`); what's left is a launcher (`scripts/` or the rig) that starts the three
+  forwards in the background, dedups, opens `127.0.0.1:13000/13001/13080`, and reports "box
+  offline". Do after the pilot-placement call below — moot if the pilot moves to the rig.
+- **`mybuddy-status` / `-start` / `-stop` (handoff Priority 2).** Plain-English health for
+  Ollama, gateway, containers, loopback ports. Fits `scripts/` as ops tooling; container
+  checks need sudo on the box (deliberate), so status should degrade to HTTP probes.
+- **LibreChat network allowance.** `app_default` is `172.20.0.0/16`; the handoff's two UFW
+  rules cover only `.18` and `.19`. Verify (root) before wiring a LibreChat endpoint.
 - **Box housekeeping.** Fast-forward `~/AI-Server` to `origin/main` (`c578e69`); prune the
   merged box worktrees (`box-mission`, `box-phase0`, `box-wrapup`); move the loose benchmark
   files out of `~`.
@@ -61,4 +76,11 @@ always-on services, and every chat UI can evict the working model. Two readings:
 
 Pick one so the roadmap items above ("batch identity", "residency policy", "LibreChat endpoint")
 know whether they are worth doing. Until then the endpoint work continues unchanged.
+```
+
+```
+The handoff's Priority 5 proposes an agent harness on the box (Goose + MCP servers + approval
+boundaries + audit log). That is a new subsystem, not in the NORTHSTAR mission and not a fix.
+Not built. If you want it, it deserves its own NORTHSTAR.<slug>.draft.md — say so and one gets
+drafted; until then it stays parked here.
 ```
