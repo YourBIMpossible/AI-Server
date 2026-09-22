@@ -34,6 +34,15 @@ protocol for the three-door rule this file exists to serve.
   `decisions/2026-09-21__model-scoring-qwen3.5-9b.md`. New tools: `scripts/mybuddy-status`
   (box) and `scripts/windows/` (the desktop "MyBuddy" shortcut).
 
+- **2026-09-21 — LibreChat reaches the model.** A new UFW rule, added by the owner:
+  - The rule: `allow in on <LibreChat bridge> from 172.20.0.0/16 to 172.17.0.1 port 11434 proto tcp`,
+    comment "LibreChat to Ollama". It is scoped to that bridge, that subnet and the Docker
+    host-gateway address. Backup: `/root/ufw-backup-20260921.tgz`.
+  - Verified from inside the container: the model list includes gemma4, and a chat on
+    `gemma4:26b-a4b-it-q4_K_M` replied. All three UIs return 200, and `mybuddy-status` shows all
+    online and the model loaded.
+  - If Docker recreates `app_default`, the bridge name changes and the rule needs re-adding.
+
 ## Roadmap
 
 - **Build the AI-Server dashboard status card.** Repo: `F:\AI-Dashboard\Dashboard` (the live
@@ -49,10 +58,6 @@ protocol for the three-door rule this file exists to serve.
   version pointed at a dead path). Not part of the AI-Server NORTHSTAR mission (that mission
   is the endpoint, not its dashboard surface) — build it as its own task, in the dashboard
   repo, whenever picked up.
-- **LibreChat can't reach the model server yet (owner, sudo).** Its Docker network
-  (`app_default`) isn't allowed through UFW to port 11434, so its chats time out. One command
-  on the box:
-  `sudo ufw allow from 172.20.0.0/16 to any port 11434 proto tcp`
 - **Residency after scoring or benchmarks.** Anything that loads another model can evict
   gemma4. `mybuddy-status` shows "not loaded"; the next UI chat reloads it. A timer-based
   re-warm is optional; add it only if cold starts annoy.
