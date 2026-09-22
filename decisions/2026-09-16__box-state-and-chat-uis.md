@@ -1,4 +1,4 @@
-# Box state check and the chat-UI pilot
+# Box state check and the chat-UI setup
 
 **Date:** 2026-09-16 · **Box:** `mybuddy` · **Method:** read-only survey over `ssh mybuddy`
 (ports, units, journals, compose files with secrets redacted, HTTP probes). Nothing on the box
@@ -44,10 +44,10 @@ the CSV: 22.7 GB of 24 GB. These numbers live only in the home directory — not
 no batch identity, not comparable to the WP-F/Phase-0 records. Useful as a smoke signal
 (the 30B-A3B fits with ~1.3 GB to spare), not as evidence for a model decision.
 
-## The chat-UI pilot: `~/mybuddy-pilot/`
+## The chat-UI setup: `~/mybuddy/`
 
 Three chat front-ends were installed on 2026-09-16 (~03:57–06:12), all Docker, all bound to
-**localhost only**, data under `/srv/data/mybuddy-pilot/` (root-owned):
+**localhost only**, data under `/srv/data/mybuddy/` (root-owned):
 
 | App | Port | Image | Talks to the model via | Notes |
 |---|---|---|---|---|
@@ -73,8 +73,8 @@ Nothing in "What done looks like" moved. Two things to watch:
 
 1. **Instrument load.** LibreChat's stack (Mongo + Meilisearch + Postgres + a RAG API) runs
    permanently. Today it is idle (load 0.15), but any eval run should record whether the
-   pilot was up. Batch identity already carries the hardware profile; it should carry
-   "pilot containers running: yes/no" too, or evals should run with the pilot stopped.
+   UIs were up. Batch identity already carries the hardware profile; it should carry
+   "UI containers running: yes/no" too, or evals should run with the UIs stopped.
 2. **Residency.** A chat UI that sends its own `keep_alive` (Open WebUI does, per
    conversation) will evict whatever `preload.py` warmed. The working model's residency is
    no longer under the endpoint's control alone.

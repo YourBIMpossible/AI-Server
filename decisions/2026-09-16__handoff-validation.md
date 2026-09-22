@@ -1,8 +1,8 @@
 # Validation of the MyBuddy handoff (2026-09-16)
 
 **Source:** `handoffs/MYBUDDY-HANDOFF-2026-09-16.md` — written by a separate chat session
-during the pilot install; imported verbatim. **Method:** read-only probes over `ssh mybuddy`
-the same day, after `decisions/2026-09-16__box-state-and-chat-ui-pilot.md`. Nothing changed.
+during the UI install; imported verbatim. **Method:** read-only probes over `ssh mybuddy`
+the same day, after `decisions/2026-09-16__box-state-and-chat-uis.md`. Nothing changed.
 
 ## Confirmed
 
@@ -40,7 +40,7 @@ the same day, after `decisions/2026-09-16__box-state-and-chat-ui-pilot.md`. Noth
    Priority-1 step 1 is done; only the launcher wrapper is left.
 4. **The API-key gateway is missing from the handoff's picture.** `aiserver-gateway.service`
    serves the OpenAI-compatible endpoint on `:11440` (loopback, LAN, tailnet) with a Bearer key.
-   Every pilot UI bypasses it via raw `:11434`. Fine while loopback-only; not fine the moment a
+   Every chat UI bypasses it via raw `:11434`. Fine while loopback-only; not fine the moment a
    UI is exposed on LAN/tailnet (the handoff's "future access direction").
 
 ## Could not verify (root-only, no PTY for sudo)
@@ -53,6 +53,6 @@ the same day, after `decisions/2026-09-16__box-state-and-chat-ui-pilot.md`. Noth
 
 ## Routing
 
-The handoff's "Recommended next work" is UX/ops on the rig and the pilot — none of it moves the
+The handoff's "Recommended next work" is UX/ops on the rig and the UIs — none of it moves the
 NORTHSTAR mission. Routed in `WORKLOG.md`: launcher + status scripts → Roadmap (pending the
-pilot-placement call); Goose/agent harness → Needs your call (a new subsystem).
+UI-placement call); Goose/agent harness → Needs your call (a new subsystem).

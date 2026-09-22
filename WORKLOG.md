@@ -6,9 +6,9 @@ protocol for the three-door rule this file exists to serve.
 ## Done
 
 - **2026-09-16 — Box state check.** Read-only survey of `mybuddy` after the 09-13 closeout,
-  recorded in `decisions/2026-09-16__box-state-and-chat-ui-pilot.md`. Endpoint still meets
+  recorded in `decisions/2026-09-16__box-state-and-chat-uis.md`. Endpoint still meets
   the closeout bar; model currently cold (per-request `keep_alive` from the owner's benchmark
-  overrode the server default); three chat UIs found under `~/mybuddy-pilot/`, all
+  overrode the server default); three chat UIs found under `~/mybuddy/`, all
   localhost-only; four unevaluated models pulled 09-13.
 - **2026-09-16 — Handoff validated.** The owner's `handoffs/MYBUDDY-HANDOFF-2026-09-16.md`
   (imported verbatim) checked against the box: `decisions/2026-09-16__handoff-validation.md`.
@@ -42,6 +42,13 @@ protocol for the three-door rule this file exists to serve.
     `gemma4:26b-a4b-it-q4_K_M` replied. All three UIs return 200, and `mybuddy-status` shows all
     online and the model loaded.
   - If Docker recreates `app_default`, the bridge name changes and the rule needs re-adding.
+- **2026-09-22 — Open WebUI 0.11.3 → 0.11.4; "pilot" removed from box paths.**
+  - The UI setup moved from `~/mybuddy-pilot` to `~/mybuddy`, and its data from
+    `/srv/data/mybuddy-pilot` to `/srv/data/mybuddy`. The three compose files were repointed.
+    Compose project names are unchanged, so the named volumes and the UFW bridge are untouched.
+  - Backup of all UI data taken while stopped: `~/mybuddy-ui-backup-20260922.tgz` (874 MB).
+  - `mybuddy-status`: all online, model loaded, exit 0.
+  - Open WebUI still tracks `:main` (the dev branch); pinning a release tag is optional.
 
 ## Roadmap
 
@@ -72,7 +79,7 @@ protocol for the three-door rule this file exists to serve.
 
 ## Needs your call
 
-Nothing open. The four earlier calls (pilot placement, Goose, scope split, raw `:11434`) were
+Nothing open. The four earlier calls (UI placement, Goose, scope split, raw `:11434`) were
 settled 2026-09-21 by the adopted personal plan `plans/2026-09-21__mybuddy-ai-server-plan.md`:
 UIs stay on the box; Goose/agents and a separate workspace project are parked; `:11434` is
 accepted for the private setup and revisited on the plan's listed triggers.

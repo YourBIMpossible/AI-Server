@@ -26,7 +26,7 @@ Part 1 (the BIMpossible PR #671 CI-plan decision) was moved to the private BIMpo
 | Scope split: `mybuddy` as infrastructure plus a separate "Personal AI Workspace" | **Needs your call.** Consistent with the mission ("a consumer of the endpoint") | WORKLOG → needs a `NORTHSTAR.personal-ai.draft.md` if yes |
 | NORTHSTAR edit or lock | **Rejected as framed.** Already locked; changes are human-only | — |
 | Raw `:11434` restrict or rebind | **Settled; the owner may reopen.** New fact: three UIs now run | WORKLOG → Needs your call |
-| Open WebUI as a private cockpit through `:11440/v1` | **Already accounted for** | Existing pilot call (a/b), LibreChat endpoint, one-click launcher |
+| Open WebUI as a private cockpit through `:11440/v1` | **Already accounted for** | Existing UI-placement call (a/b), LibreChat endpoint, one-click launcher |
 | Model scorecard / test corpus | **Already accounted for** | Roadmap "Score the four unevaluated models" |
 | Goose on the **rig** in a disposable worktree | **Changed existing item.** Moves off the box, which removes the "instrument" objection. Still a new subsystem | WORKLOG → the existing Goose item is amended |
 | RAG source governance before any ingest | **Added to the roadmap.** Real gap: `config/rag_sources.txt` declares two broad roots and no exclusion or citation rule exists | Roadmap |
@@ -34,7 +34,7 @@ Part 1 (the BIMpossible PR #671 CI-plan decision) was moved to the private BIMpo
 | MCP / tool authority policy | **Part of the scope-split draft** | Same |
 | vLLM criterion | **Already accounted for.** NORTHSTAR off-limits and CLAUDE.md ("not planned") | — |
 | Python 3.14 has no pip | **Already accounted for** | Memory and `decisions/2026-09-13__box-phase0-remeasure.md` |
-| UI hosting and storage model | **Folded into the existing pilot call (a/b)** | WORKLOG |
+| UI hosting and storage model | **Folded into the existing UI-placement call (a/b)** | WORKLOG |
 
 **Net:** one roadmap addition (RAG source governance), one amended call (Goose → rig), one
 reopened call (`:11434`), and one new call (scope split). Everything else is already covered.
