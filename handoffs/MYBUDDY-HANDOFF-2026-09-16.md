@@ -60,8 +60,8 @@ AnythingLLM was tested end-to-end successfully with Ollama and the selected loca
 
 - Hostname: `mybuddy`
 - Ubuntu: `26.04.1 LTS`
-- LAN IPv4 address: `192.168.1.128`
-- Tailscale IPv4 address observed: `100.89.51.34`
+- LAN IPv4 address: `<box-lan-ip>`
+- Tailscale IPv4 address observed: `<box-tailnet-ip>`
 - GPU: NVIDIA GeForce RTX 3090
 - VRAM: 24 GB / `24576 MiB`
 
@@ -375,7 +375,7 @@ ssh -N `
   -L 13000:127.0.0.1:3000 `
   -L 13001:127.0.0.1:3001 `
   -L 13080:127.0.0.1:3080 `
-  zetard@192.168.1.128
+  zetard@<box-lan-ip>
 ```
 
 After entering the MyBuddy password, the PowerShell window appears blank. That is expected: it is holding the tunnels open. If the window is closed or `Ctrl+C` is pressed, the browser links stop working.
@@ -398,7 +398,7 @@ The SSH-tunnel approach works but is not acceptable as the normal user workflow 
 
 ### Current facts
 
-- MyBuddy has a Tailscale address: `100.89.51.34`.
+- MyBuddy has a Tailscale address: `<box-tailnet-ip>`.
 - The Windows desktop and MyBuddy are on the same LAN today.
 
 ### Correct mental model
@@ -406,7 +406,7 @@ The SSH-tunnel approach works but is not acceptable as the normal user workflow 
 Tailscale is **not required** for the stationary Windows desktop to reach MyBuddy while both are on the same home LAN. The desktop can use MyBuddy’s LAN address:
 
 ```text
-192.168.1.128
+<box-lan-ip>
 ```
 
 Tailscale is useful when the user wants access from a phone/laptop away from home, without opening router ports or exposing these web applications publicly.
@@ -443,7 +443,7 @@ Do not expose the existing ports broadly to the internet.
                            127.0.0.1:13080  LibreChat
                                       |
                                       | SSH local forwards over LAN
-                                      | ssh -> zetard@192.168.1.128
+                                      | ssh -> zetard@<box-lan-ip>
                                       v
 MyBuddy Ubuntu Server ------------------------------------------------
   loopback-only published ports:
@@ -610,7 +610,7 @@ ssh -N `
   -L 13000:127.0.0.1:3000 `
   -L 13001:127.0.0.1:3001 `
   -L 13080:127.0.0.1:3080 `
-  zetard@192.168.1.128
+  zetard@<box-lan-ip>
 ```
 
 ---

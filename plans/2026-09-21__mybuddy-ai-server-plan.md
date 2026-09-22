@@ -7,14 +7,13 @@ whether a Personal AI Workspace becomes its own project.
 **Sources:** `WORKLOG.md` (Roadmap + Needs your call),
 `decisions/2026-09-16__box-state-and-chat-ui-pilot.md`,
 `decisions/2026-09-16__handoff-validation.md`,
-`decisions/2026-09-21__personal-ai-and-pr671-ci-plan.md` Part 2. PR #671 is planned separately
-in `plans/2026-09-21__pr671-resolution-plan.md`.
+`decisions/2026-09-21__personal-ai-and-pr671-ci-plan.md`.
 
 ## Current state (2026-09-16 survey, validated)
 
 | Piece | State |
 |---|---|
-| Box | `mybuddy` — Ubuntu 26.04.1, RTX 3090 24 GB, LAN `192.168.1.128`, tailnet `100.89.51.34`, `ssh mybuddy` |
+| Box | `mybuddy` — Ubuntu 26.04.1, RTX 3090 24 GB, LAN `<box-lan-ip>`, tailnet `<box-tailnet-ip>`, `ssh mybuddy` |
 | Runner | Ollama 0.34 on `*:11434`, no auth (accepted at closeout) |
 | Client door | Caddy gateway `:11440`, Bearer `INFERENCE_API_KEY` |
 | Model pick | `gemma4:26b-a4b` (27/27 WP-F) in `config/models.txt` |
@@ -101,7 +100,7 @@ The draft would carry:
 | Item | Why parked |
 |---|---|
 | AI-Server dashboard status card (`F:\AI-Dashboard\Dashboard`) | Dashboard repo, not the mission; owner said hands off the UI until asked |
-| Local-model behavioural lane for BIMpossible CI | Cross-repo new consumer; needs its own scope (see #671 plan) |
+| Local-model behavioural lane for BIMpossible CI | Cross-repo new consumer; needs its own scope |
 | Goose/agent harness **on the box** | Superseded by Goose-on-rig (G4) |
 | vLLM | NORTHSTAR off-limits on Ampere/single-user; re-enters only if either stops being true |
 | Customer-facing inference, bigger embedding model, GPU OCR rescue | NORTHSTAR out of scope |

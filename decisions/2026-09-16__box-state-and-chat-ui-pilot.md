@@ -10,7 +10,7 @@ was changed. First look at the box since the 2026-09-13 closeout.
 |---|---|
 | Uptime | 3d 8h — no reboot since the closeout boot of 09-13 |
 | Ollama | `ollama.service` running, 0.34.0, `*:11434`; `/v1/models` lists 8 models |
-| Gateway | `aiserver-gateway.service` running (Caddy), `:11440` on `127.0.0.1`, `192.168.1.128`, `100.89.51.34`; no warnings in the journal since 09-13 |
+| Gateway | `aiserver-gateway.service` running (Caddy), `:11440` on `127.0.0.1`, `<box-lan-ip>`, `<box-tailnet-ip>`; no warnings in the journal since 09-13 |
 | Watch timer | `aiserver-endpoint-watch.timer` active, every minute |
 | Preload | `aiserver-preload.service` enabled; ran once at boot (oneshot) |
 | Units | All `ExecStart` lines point at `/home/zetard/AI-Server/scripts/…` — off the worktree path, as recorded 09-13 |

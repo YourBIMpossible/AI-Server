@@ -27,8 +27,8 @@ The important mindset: do not build a giant autonomous “AI platform” first. 
 
 - Hostname: `mybuddy`
 - Login user: `zetard`
-- LAN IP: `192.168.1.128`
-- Tailscale IP: `100.89.51.34`
+- LAN IP: `<box-lan-ip>`
+- Tailscale IP: `<box-tailnet-ip>`
 - Tailscale MagicDNS: `mybuddy`
 - SSH: passwordless from the rig via `ssh mybuddy`
 - OS: Ubuntu 26.04.1 LTS

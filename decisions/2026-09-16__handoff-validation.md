@@ -8,7 +8,7 @@ the same day, after `decisions/2026-09-16__box-state-and-chat-ui-pilot.md`. Noth
 
 | Claim | Evidence |
 |---|---|
-| Ubuntu 26.04.1 LTS, LAN `192.168.1.128`, tailnet `100.89.51.34`, RTX 3090 24576 MiB | `/etc/os-release`, `ss`, `nvidia-smi` |
+| Ubuntu 26.04.1 LTS, LAN `<box-lan-ip>`, tailnet `<box-tailnet-ip>`, RTX 3090 24576 MiB | `/etc/os-release`, `ss`, `nvidia-smi` |
 | Three UIs bound to loopback: `127.0.0.1:3000/3001/3080`; Ollama on `*:11434` | `ss -ltn`; all three answer HTTP 200 |
 | `/srv/data` owned `zetard`, `/srv/models` owned `ollama` | `stat` |
 | Compose `extra_hosts` pinned to `172.18.0.1` (Open WebUI) and `172.19.0.1` (AnythingLLM) | both files, mtimes 05:27 and 05:58 UTC |
@@ -31,7 +31,7 @@ the same day, after `decisions/2026-09-16__box-state-and-chat-ui-pilot.md`. Noth
    "score the four unevaluated models" roadmap item.
 3. **SSH key auth already exists for the rig.** `authorized_keys` on the box carries
    `zeria@rig-to-mybuddy`, and `ssh mybuddy` logs in without a password. The handoff's tunnel
-   (`ssh -N -L … zetard@192.168.1.128` + password) is the long form of
+   (`ssh -N -L … zetard@<box-lan-ip>` + password) is the long form of
 
    ```powershell
    ssh -N -L 13000:127.0.0.1:3000 -L 13001:127.0.0.1:3001 -L 13080:127.0.0.1:3080 mybuddy

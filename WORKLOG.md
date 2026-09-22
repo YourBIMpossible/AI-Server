@@ -17,11 +17,9 @@ protocol for the three-door rule this file exists to serve.
   (`ssh mybuddy`), gateway `:11440` absent from its picture. UFW rules and `docker ps`
   unverifiable without sudo.
 
-- **2026-09-21 — Two handoffs routed.** `handoffs/PERSONAL-AI-HANDOFF-2026-09-21.md` and
-  `handoffs/LOCAL-AI-CI-PLAN-PR671-2026-09-21.md` (verbatim) checked and routed in
-  `decisions/2026-09-21__personal-ai-and-pr671-ci-plan.md`. #671 call: against the local-runner
-  plan as the unblock; for a narrow pin-split PR in BIMpossible (measured: prompt hash unchanged,
-  3 pytest failures from the source-hash pin only).
+- **2026-09-21 — Personal-AI handoff routed.** `handoffs/PERSONAL-AI-HANDOFF-2026-09-21.md`
+  (verbatim) routed in `decisions/2026-09-21__personal-ai-and-pr671-ci-plan.md`. The PR #671
+  CI-plan decision moved to the private BIMpossible repo.
 
 ## Roadmap
 
@@ -71,9 +69,9 @@ protocol for the three-door rule this file exists to serve.
   `F:\AI-Brain-Data` and `F:\BIMpossible-Workspace` whole; nothing is ingested yet. Write the
   approved roots, exclusions (client data categorically?), citation rule and re-index/delete
   behaviour before the first index run.
-- **Local-model behavioural lane for BIMpossible CI (cross-repo).** The #671 plan's Phase 3: a
-  local-provider runner with its own evidence schema, never labelled as Haiku evidence. Not on
-  #671's path. New consumer of `mybuddy`; needs its own scope before building.
+- **Local-model behavioural lane for BIMpossible CI (cross-repo).** A local-provider eval runner
+  with its own evidence, never labelled as provider evidence. New consumer of `mybuddy`; needs
+  its own scope before building. Details live in the private BIMpossible repo.
 
 ## Needs your call
 
@@ -100,20 +98,6 @@ drafted; until then it stays parked here.
 2026-09-21 update: the personal-AI handoff moves Goose to the RIG (disposable worktree, local
 endpoint via :11440), which removes the "instrument box" objection. Still a new subsystem —
 same draft route.
-```
-
-```
-BIMpossible PR #671 (decisions/2026-09-21__personal-ai-and-pr671-ci-plan.md). The local-AI CI
-plan is NOT the unblock: local evidence can't stand in for the pinned claude-haiku-4-5, and
-#671 needs no behavioural evidence once the whole-file source hash is demoted. Proposed instead:
-
-  (a) A small BIMpossible PR to main: nl_filter_source_sha256 -> provenance-only, add a
-      model_config_sha256 pin over the call parameters, fix the two exact-dict tests.
-      Then rebase #671 (security-reviewed tenant conflicts + 07731a4d). $0. Recommended.
-  (b) Paid live run (~160 Haiku calls) + --write-baseline on #671. Clean evidence, costs money.
-  (c) --write-baseline alone on #671 (evidence marked stale). Quick hack; CLAUDE.md:53 forbids it.
-
-Say a/b/c. Either way the tenant-isolation conflicts still need a manual, reviewed rebase.
 ```
 
 ```
