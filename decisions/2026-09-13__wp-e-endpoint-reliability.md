@@ -26,7 +26,7 @@ New config keys (in `.env.example`): `EVAL_JUDGE_MODEL`, `ENDPOINT_ALERT_MINUTES
 - **Local check before install:** Caddy on loopback with a throwaway key, `aiserver.client.LLM` as the client. Missing and wrong keys raise `LLMError` with HTTP 401; the right key gave `ping()` True, a completion, and SSE streaming chunks.
 - **Owner's `sudo bash scripts/setup-ops.sh` (2026-09-13 06:17 UTC):**
   - The run aborted at its verify step: the step sourced `gateway.env` as shell and executed an IP address. Fixed in `0b8b6a1` by reading the key with `sed`; re-runs are safe and keep the key.
-  - The gateway had already started: active, 0 restarts, listening on `127.0.0.1`, `192.168.1.128` and `100.89.51.34:11440`, 401 without a key on all three.
+  - The gateway had already started: active, 0 restarts, listening on `127.0.0.1`, `<box-lan-ip>` and `<box-tailnet-ip>:11440`, 401 without a key on all three.
   - Direct `127.0.0.1:11434` is still 200; nothing user-facing broke.
   - The endpoint-watch timer fires each minute and exits clean.
 - **Tests:** `tests/test_ops.py` covers the alert state machine (one alert per outage, blips never alert, a 0 timestamp is a real value), preload against the stdlib mock, and config guards (private default bind, `/v1` only, no sourcing, key kept).
