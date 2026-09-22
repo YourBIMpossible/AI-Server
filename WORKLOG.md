@@ -24,6 +24,16 @@ protocol for the three-door rule this file exists to serve.
 - **2026-09-21 — Personal plan adopted; PR #21 replaced.** Owner approved the updated
   personal plan and history option (a): #21 closed unmerged, clean records re-submitted.
 
+- **2026-09-21 — Plan steps 2–5 done.** All three UIs are pinned to
+  `gemma4:26b-a4b-it-q4_K_M` with keep-alive forever:
+  - Open WebUI: model list and defaults in its config DB.
+  - AnythingLLM: compose env.
+  - LibreChat: new `librechat.yaml` custom endpoint.
+
+  Backups `*.bak-20260921` sit next to each file. Scoring (UIs stopped) kept gemma4:
+  `decisions/2026-09-21__model-scoring-qwen3.5-9b.md`. New tools: `scripts/mybuddy-status`
+  (box) and `scripts/windows/` (the desktop "MyBuddy" shortcut).
+
 ## Roadmap
 
 - **Build the AI-Server dashboard status card.** Repo: `F:\AI-Dashboard\Dashboard` (the live
@@ -39,34 +49,13 @@ protocol for the three-door rule this file exists to serve.
   version pointed at a dead path). Not part of the AI-Server NORTHSTAR mission (that mission
   is the endpoint, not its dashboard surface) — build it as its own task, in the dashboard
   repo, whenever picked up.
-- **Score the four unevaluated models.** `gemma4:31b-it-q4_K_M`, `qwen3.8:27b-q4_K_M`,
-  `qwen3.5:9b`, `nemotron-3.5-lightning:30b-a3b-q4_K_M` are on the box with no WP-F score.
-  Run `eval/` on the box against each, with batch identity, so the pick in
-  `config/models.txt` stays evidence-backed if any of them is meant to challenge gemma4.
-  The owner's `~/ollama-benchmark.py` on nemotron is a smoke signal (fits, 22.7 GB peak), not
-  a score.
-- **Batch identity should record pilot load.** Add "pilot containers running: yes/no" to the
-  eval batch identity, or run evals with `~/mybuddy-pilot` stopped, so LibreChat's permanent
-  Mongo/Meilisearch/Postgres/RAG stack cannot silently skew a measurement.
-- **Residency policy vs chat UIs.** Chat front-ends send their own `keep_alive` and evict the
-  preloaded working model. Decide whether `preload.py` should re-warm on a timer, or whether
-  residency is simply left to whichever client spoke last.
-- **LibreChat has no chat endpoint configured.** No `librechat.yaml` exists or is mounted;
-  Ollama is wired for embeddings only. If LibreChat stays in the pilot it needs a `custom`
-  endpoint pointing at the box's OpenAI-compatible URL (ideally through the `:11440` gateway
-  with `INFERENCE_API_KEY`, not raw `:11434`).
-- **One-click UI access from the rig (handoff Priority 1).** Key auth already works
-  (`ssh mybuddy`); what's left is a launcher (`scripts/` or the rig) that starts the three
-  forwards in the background, dedups, opens `127.0.0.1:13000/13001/13080`, and reports "box
-  offline". Do after the pilot-placement call below — moot if the pilot moves to the rig.
-- **`mybuddy-status` / `-start` / `-stop` (handoff Priority 2).** Plain-English health for
-  Ollama, gateway, containers, loopback ports. Fits `scripts/` as ops tooling; container
-  checks need sudo on the box (deliberate), so status should degrade to HTTP probes.
-- **LibreChat network allowance.** `app_default` is `172.20.0.0/16`; the handoff's two UFW
-  rules cover only `.18` and `.19`. Verify (root) before wiring a LibreChat endpoint.
-- **Box housekeeping.** Fast-forward `~/AI-Server` to `origin/main` (`c578e69`); prune the
-  merged box worktrees (`box-mission`, `box-phase0`, `box-wrapup`); move the loose benchmark
-  files out of `~`.
+- **LibreChat can't reach the model server yet (owner, sudo).** Its Docker network
+  (`app_default`) isn't allowed through UFW to port 11434, so its chats time out. One command
+  on the box:
+  `sudo ufw allow from 172.20.0.0/16 to any port 11434 proto tcp`
+- **Residency after scoring or benchmarks.** Anything that loads another model can evict
+  gemma4. `mybuddy-status` shows "not loaded"; the next UI chat reloads it. A timer-based
+  re-warm is optional; add it only if cold starts annoy.
 
 - **RAG source governance before any ingest.** `config/rag_sources.txt` declares
   `F:\AI-Brain-Data` and `F:\BIMpossible-Workspace` whole; nothing is ingested yet. Write the

@@ -1,0 +1,3 @@
+#!/bin/sh
+# MyBuddy readiness in plain English. Install: ln -s ~/AI-Server/scripts/mybuddy-status ~/.local/bin/
+exec /usr/bin/python3 "$(dirname "$(readlink -f "$0")")/mybuddy_status.py" "$@"
