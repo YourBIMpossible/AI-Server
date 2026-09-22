@@ -17,6 +17,12 @@ protocol for the three-door rule this file exists to serve.
   (`ssh mybuddy`), gateway `:11440` absent from its picture. UFW rules and `docker ps`
   unverifiable without sudo.
 
+- **2026-09-21 — Two handoffs routed.** `handoffs/PERSONAL-AI-HANDOFF-2026-09-21.md` and
+  `handoffs/LOCAL-AI-CI-PLAN-PR671-2026-09-21.md` (verbatim) checked and routed in
+  `decisions/2026-09-21__personal-ai-and-pr671-ci-plan.md`. #671 call: against the local-runner
+  plan as the unblock; for a narrow pin-split PR in BIMpossible (measured: prompt hash unchanged,
+  3 pytest failures from the source-hash pin only).
+
 ## Roadmap
 
 - **Build the AI-Server dashboard status card.** Repo: `F:\AI-Dashboard\Dashboard` (the live
@@ -61,6 +67,14 @@ protocol for the three-door rule this file exists to serve.
   merged box worktrees (`box-mission`, `box-phase0`, `box-wrapup`); move the loose benchmark
   files out of `~`.
 
+- **RAG source governance before any ingest.** `config/rag_sources.txt` declares
+  `F:\AI-Brain-Data` and `F:\BIMpossible-Workspace` whole; nothing is ingested yet. Write the
+  approved roots, exclusions (client data categorically?), citation rule and re-index/delete
+  behaviour before the first index run.
+- **Local-model behavioural lane for BIMpossible CI (cross-repo).** The #671 plan's Phase 3: a
+  local-provider runner with its own evidence schema, never labelled as Haiku evidence. Not on
+  #671's path. New consumer of `mybuddy`; needs its own scope before building.
+
 ## Needs your call
 
 ```
@@ -83,4 +97,34 @@ The handoff's Priority 5 proposes an agent harness on the box (Goose + MCP serve
 boundaries + audit log). That is a new subsystem, not in the NORTHSTAR mission and not a fix.
 Not built. If you want it, it deserves its own NORTHSTAR.<slug>.draft.md — say so and one gets
 drafted; until then it stays parked here.
+2026-09-21 update: the personal-AI handoff moves Goose to the RIG (disposable worktree, local
+endpoint via :11440), which removes the "instrument box" objection. Still a new subsystem —
+same draft route.
+```
+
+```
+BIMpossible PR #671 (decisions/2026-09-21__personal-ai-and-pr671-ci-plan.md). The local-AI CI
+plan is NOT the unblock: local evidence can't stand in for the pinned claude-haiku-4-5, and
+#671 needs no behavioural evidence once the whole-file source hash is demoted. Proposed instead:
+
+  (a) A small BIMpossible PR to main: nl_filter_source_sha256 -> provenance-only, add a
+      model_config_sha256 pin over the call parameters, fix the two exact-dict tests.
+      Then rebase #671 (security-reviewed tenant conflicts + 07731a4d). $0. Recommended.
+  (b) Paid live run (~160 Haiku calls) + --write-baseline on #671. Clean evidence, costs money.
+  (c) --write-baseline alone on #671 (evidence marked stale). Quick hack; CLAUDE.md:53 forbids it.
+
+Say a/b/c. Either way the tenant-isolation conflicts still need a manual, reviewed rebase.
+```
+
+```
+Scope split (personal-AI handoff): treat mybuddy as infrastructure and a "Personal AI Workspace"
+(cockpit UI, agents, curated RAG, cloud routing, MCP/tool authority) as a separate consumer
+project. Consistent with the mission, but it is a new project. Yes -> a
+NORTHSTAR.personal-ai.draft.md gets drafted for you to lock; no -> the items stay parked.
+```
+
+```
+Raw Ollama :11434 is on 0.0.0.0 without auth — accepted at the 09-13 closeout. New fact since:
+three chat UIs run on the box, and any LAN/tailnet peer can bypass the :11440 Bearer gateway.
+Keep as settled, or reopen (rebind to loopback / UFW to gateway only)? Box unchanged until told.
 ```
