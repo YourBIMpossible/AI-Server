@@ -225,7 +225,7 @@ Each container must therefore reach the host Ollama service through a host gatew
 Compose file:
 
 ```text
-/home/zetard/mybuddy-pilot/open-webui/compose.yaml
+/home/zetard/mybuddy/open-webui/compose.yaml
 ```
 
 Docker network:
@@ -276,7 +276,7 @@ HTTP 200
 Compose file:
 
 ```text
-/home/zetard/mybuddy-pilot/anythingllm/compose.yaml
+/home/zetard/mybuddy/anythingllm/compose.yaml
 ```
 
 Docker network:
@@ -313,7 +313,7 @@ AnythingLLM was recreated after the Compose edit:
 
 ```bash
 sudo docker compose \
-  -f ~/mybuddy-pilot/anythingllm/compose.yaml \
+  -f ~/mybuddy/anythingllm/compose.yaml \
   up -d --force-recreate
 ```
 

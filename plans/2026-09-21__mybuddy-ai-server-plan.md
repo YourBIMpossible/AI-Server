@@ -31,7 +31,7 @@ These are the working decisions for this personal plan.
 | UI location | Keep Open WebUI, AnythingLLM, and LibreChat on MyBuddy for now |
 | Daily UI | Not chosen yet; use the three UIs naturally before choosing |
 | UI model behavior | All UIs stay pinned to one selected model during testing and normal daily use |
-| Gateway `:11440` | Keep available; routing UIs through it is optional for the current single-user pilot |
+| Gateway `:11440` | Keep available; routing UIs through it is optional for the current single-user setup |
 | Raw Ollama `:11434` | Accepted temporarily for the private personal setup; revisit before broader access or sensitive/new workloads |
 | RAG/document search | Not yet; first decide allowed and forbidden folders |
 | Goose/agents/MCP | Parked until there is a real agent job worth doing |
@@ -237,7 +237,7 @@ Do this when you want regular unattended endpoint validation. Skip it for now if
 
 Route UI traffic through the authenticated, OpenAI-compatible gateway and then restrict raw Ollama `:11434`.
 
-This is optional for the current one-user, SSH-tunneled UI pilot. It is still more isolated than direct raw Ollama because it adds authentication and a stable client contract, and it reduces what devices on the home LAN can call directly.
+This is optional for the current one-user, SSH-tunneled UI setup. It is still more isolated than direct raw Ollama because it adds authentication and a stable client contract, and it reduces what devices on the home LAN can call directly.
 
 Revisit it before adding agents, external consumers, sensitive data, another user, or broader access.
 
