@@ -49,6 +49,16 @@ protocol for the three-door rule this file exists to serve.
   - Backup of all UI data taken while stopped: `~/mybuddy-ui-backup-20260922.tgz` (874 MB).
   - `mybuddy-status`: all online, model loaded, exit 0.
   - Open WebUI still tracks `:main` (the dev branch); pinning a release tag is optional.
+- **2026-09-22 — Box `WORKSPACE` set.** The box `.env` carried only `INFERENCE_MODEL`, so
+  `load_config()` fell back to the Windows default `F:\BIMpossible-Workspace` — a path that can
+  never exist there, which made every job's "roots not found" message misleading. The box `.env`
+  (still mode 600) now sets `WORKSPACE=/home/zetard/workspace`, and that directory exists.
+  `load_config()` on the box resolves it, and `workspace.exists()` is true. The flag raised in
+  `decisions/2026-09-13__northstar-closeout-check.md` is cleared.
+  - **No sources were copied.** The digest/rollup/drift jobs look for
+    `BIMpossible_Workspace/01_BuildLog` and `AI-Brain-Data/decision-log` under that root; neither
+    is on the box, so those jobs still report `workspace-roots-not-found` — now against a real box
+    path. Populating it is a separate call, gated by the no-client-data policy.
 
 ## Roadmap
 
