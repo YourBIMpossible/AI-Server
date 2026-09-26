@@ -83,6 +83,12 @@ protocol for the three-door rule this file exists to serve.
   `F:\AI-Brain-Data` and `F:\BIMpossible-Workspace` whole; nothing is ingested yet. Write the
   approved roots, exclusions (client data categorically?), citation rule and re-index/delete
   behaviour before the first index run.
+  2026-09-26 facts (no decision made): `rag/` currently ingests `.md` only — most of
+  `AI-Brain-Data`'s json/csv/txt/py files (roughly 800 of ~1,150 non-md files) are skipped.
+  The box has two empty/unused drives if a box-side path is ever chosen: `/srv/data`
+  (954GB, near-empty) and `sda` (954GB, unpartitioned, no filesystem). The Open WebUI Pipe
+  (`multi-ui-connectors/open-webui/` in AI-Brain-Data) does not generalize to this — it is a
+  fixed, verbatim wire to one gateway/corpus, not a retrieval or chat layer.
 - **Local-model behavioural lane for BIMpossible CI (cross-repo).** A local-provider eval runner
   with its own evidence, never labelled as provider evidence. New consumer of `mybuddy`; needs
   its own scope before building. Details live in the private BIMpossible repo.
